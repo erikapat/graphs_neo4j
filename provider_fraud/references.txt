@@ -1,0 +1,50 @@
+# Data dictionary
+https://docs.google.com/spreadsheets/d/1ktwjad3U-hGT_7yccGyZC4AzGhWAMs3RHrIMk8Gi8xQ/edit#gid=0
+# Ideas for featuring engienering:
+https://medium.datadriveninvestor.com/medicare-provider-fraud-detection-f551dd941947
+# Ideas for graphs enhacement of features
+https://pub.towardsai.net/insurance-fraud-detection-with-graph-analytics-91d10c5e5ec9
+
+# ppt:
+https://docs.google.com/presentation/d/1Thuw_eZskafkl9W3xYuEVsjgTJKFeEkzEfAmczH96Uw/edit#slide=id.g14021fe5fbe_0_1
+https://docs.google.com/presentation/d/1Thuw_eZskafkl9W3xYuEVsjgTJKFeEkzEfAmczH96Uw/edit#slide=id.gfdbe881cf6_0_42
+#doc:
+https://docs.google.com/document/d/10z9xbn4dZWkforlAszCDaa1M0roAW-MOf2pjJHSnEXk/edit#heading=h.ks59oj8ag7f8
+#other examples (important ones)
+https://jiaxiangbu.github.io/anti_fraud_practice/
+https://www.kaggle.com/code/matthewmaddock/graph-features-random-forest-networkx
+https://towardsdatascience.com/fraud-detection-with-graph-analytics-2678e817b69e
+
+# -------------------------------------------------------------------------------------------------
+# categories
+
+# interpretability & explanation of the treatments
+https://medium.com/@dan7cor/medical-fraud-detection-using-shap-values-in-feature-selection-4f98746da7a3
+https://github.com/dancor7/Medical_Fraud_Detection_With_SHAP_Values/blob/master/Medical_Fraud.ipynb
+https://www.soa.org/48f4a5/globalassets/assets/files/resources/research-report/2024/interpretable-ml-methods.pdf
+
+
+# GANs anomaly detection (GAN-AD) model Generative Adversarial Networks
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7134221/
+
+# Anomaly detection
+https://github.com/sahaniaditya/healthcare_anamoly_detection
+Identifying Medicare Provider Fraud with Unsupervised Machine Learning
+# Ideas for unsupervised learning:
+https://medium.com/mlthinkbox/anomaly-detection-with-isolation-forest-in-scikit-learn-99417dcc3971
+
+# Data augmentation
+https://towardsdatascience.com/fraud-detection-with-generative-adversarial-nets-gans-26bea360870d
+#------------------------------------------------------------------------------------------
+
+Beneficiary Data:
+This level of data contains beneficiaries' details
+
+Outpatient Data
+This level of data consists of the claim details for the patients who were not admitted to the hospital, and who only visited there.
+
+Inpatient Data
+This level of data consists of the claim details for the patients who were admitted to the hospital. Thus,
+it comprises the 3 extra columns Admission date, Discharge date, and Diagnosis Group code.
+
+xxxx-1542865627584.csv: It consists of the medicare provider ids and their corresponding label of being potentially fraudulent or not.

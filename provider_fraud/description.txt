@@ -1,0 +1,27 @@
+1 data_understanding:
+Find patterns in the data that can be interesting
+2 Data engieniering
+Basic data to play with graphs of Neo4j.
+
+- The data is related with claims and providers, but our target is fraudulent provider, son our table would be generated
+at the level of provider including aggregated information about the claims
+- So, when we work with graphs, the nodes would be the providers and their employees (phisisiams)
+
+# ---------------------------------------------------------------
+3 Neo4j exploration
+
+
+https://jiaxiangbu.github.io/anti_fraud_practice/datacamp.html
+Fraudsters tend to cluster together:
+
+are attending the same events/activities
+are involved in the same crimes
+use the same resources
+are sometimes one and the same person (identity theft)
+Homophily in social networks (from sociology)
+People have a strong tendency to associate with other whom they perceive as being similar to themselves in some way.
+Homophily in fraud networks
+Fraudsters are more likely to be connected to other fraudsters, and legitimate people are more likely to be connected to other legitimate people.
+# ---------------------------------------------------------------
+
+>= 4 are experiments pending of validation
