@@ -4,7 +4,13 @@ import time
 # Define Neo4j connection details
 from config.conf import username, password, database, uri
 from py2neo import Graph
-import os
+
+# ----------------------------------------------------------------------------------------------
+# Consider use
+# %pip install graphdatascience
+# gds = GraphDataScience(connectionUrl, auth=(username, password))
+# gds.version()
+# ---------------------------------------------------------------------------------------------
 
 # Connect to Neo4j and specify the database
 graph = Graph(uri=uri, auth=(username, password), name=database)
@@ -29,12 +35,6 @@ df_work_with = pd.read_csv('output_data/df_work_with.csv')
 physician_nodes_df = pd.read_csv('output_data/physician_nodes_df.csv')
 provider_nodes_df = pd.read_csv('output_data/provider_nodes_df.csv')
 
-# Obtener el total de líneas en el archivo CSV
-with open('output_data/provider_nodes_df.csv', 'r') as file:
-    total_lines_pro = sum(1 for line in file) - 1  # Restamos 1 para excluir la fila de encabezados
-
-with open('output_data/physician_nodes_df.csv', 'r') as file:
-    total_lines_phy = sum(1 for line in file) - 1  # Restamos 1 para excluir la fila de encabezados
 
 # Erase all/ Initialize
 cypher_query = """
@@ -77,7 +77,8 @@ LOAD CSV WITH HEADERS
 FROM 'file:///provider_nodes_df.csv' AS row
 MERGE (p:provider {providerId: toInteger(row.provider_id)})
 SET
-p.category_id = row.category_id
+p.category_id = row.category_id,
+p.PotentialFraud = toInteger(row.PotentialFraud)
 
 """
 time_cypher(cypher_query)

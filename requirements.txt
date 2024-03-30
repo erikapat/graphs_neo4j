@@ -24,3 +24,4 @@ shap
 # Neo4j
 openpyxl
 py2neo
+GraphDataScience

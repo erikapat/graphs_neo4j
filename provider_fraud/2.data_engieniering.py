@@ -42,7 +42,7 @@ physician_nodes_df = df_select[['AttendingPhysician']]
 physician_nodes_df.rename(columns={'AttendingPhysician': 'physician_id'}, inplace=True)
 physician_nodes_df['category_id'] = 'AttendingPhysician'
 physician_nodes_df = physician_nodes_df.drop_duplicates()
-provider_nodes_df = df_select[['Provider']]
+provider_nodes_df = df_select[['Provider', 'PotentialFraud']]
 provider_nodes_df.rename(columns={'Provider': 'provider_id'}, inplace=True)
 provider_nodes_df['category_id'] = 'Provider'
 provider_nodes_df = provider_nodes_df.drop_duplicates()
@@ -59,4 +59,5 @@ provider_nodes_df.to_csv('output_data/provider_nodes_df.csv', index=False)
 df_work_with = df[['Provider', 'AttendingPhysician', 'ClaimID', 'PotentialFraud']]
 df_work_with.rename(columns={'Provider': 'provider_id', 'AttendingPhysician': 'physician_id'}, inplace=True)
 df_work_with.to_csv('output_data/df_work_with.csv', index=False)
-print(df_work_with.dtypes)
+# print(df_work_with.head())
+
