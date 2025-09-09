@@ -1,0 +1,5 @@
+High-reuse thresholds: phone>=8, shop>=20
+both  : n=2,  fraud_rate=0.000
+aonly : n=32, fraud_rate=0.281
+bonly : n=532, fraud_rate=0.269
+none  : n=4181,  fraud_rate=0.105

@@ -1,0 +1,4 @@
+Gini (shops): 0.4056
+Gini (phones): 0.2845
+Gini (plates): 0.5342
+Gini (emails): 0.2454

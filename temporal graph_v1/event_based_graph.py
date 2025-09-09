@@ -1,5 +1,6 @@
 import pandas as pd
 import networkx as nx
+import pickle  # <-- added
 
 pd.set_option('display.max_rows', 999)
 pd.set_option('display.max_columns', 999)
@@ -16,9 +17,6 @@ entity_columns = [
 ]
 
 # Build graph with timestamped edges
-import pandas as pd
-import networkx as nx
-
 
 def build_temporal_graph_with_edge_attrs(df, entity_cols):
     df = df.sort_values("claim_date")
@@ -82,8 +80,9 @@ duplicated = {k: v for k, v in attrs_seen.items() if v > 1}
 print(f"Duplicated claim-claim edges with same attrs: {len(duplicated)}")
 
 
-# Save graph
-nx.write_gpickle(G_temporal, "data/temporal_graph_with_edge_attrs.gpickle")
+# Save graph (using pickle)
+with open("data/temporal_graph_with_edge_attrs.gpickle", "wb") as f:
+    pickle.dump(G_temporal, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 # Preview some edge attributes
 edge_samples = list(G_temporal.edges(data=True))[:10]
@@ -94,9 +93,11 @@ print(edge_samples)
 import pandas as pd
 import networkx as nx
 import json
+import pickle  # ensure available in this section too
 
 def compute_graph_features_from_saved_graph_v1(graph_path: str, df, entity_cols):
-    G_full = nx.read_gpickle(graph_path)
+    with open(graph_path, "rb") as f:
+        G_full = pickle.load(f)
     features = []
 
     # Orden estable para claims del mismo día
@@ -182,7 +183,8 @@ def compute_graph_features_from_saved_graph_v1(graph_path: str, df, entity_cols)
 
 
 def compute_graph_features_from_saved_graph_v2(graph_path: str, df, entity_cols):
-    G_full = nx.read_gpickle(graph_path)
+    with open(graph_path, "rb") as f:
+        G_full = pickle.load(f)
     features = []
 
     # Orden estable para claims del mismo día
@@ -271,8 +273,8 @@ def compute_graph_features_from_saved_graph(graph_path: str, df, entity_cols):
     import json
     import math
     from collections import Counter
-
-    G_full = nx.read_gpickle(graph_path)
+    with open(graph_path, "rb") as f:
+        G_full = pickle.load(f)
     features = []
 
     df = df.copy()
@@ -391,3 +393,4 @@ features_df = compute_graph_features_from_saved_graph("data/temporal_graph_with_
 features_df.to_csv("data/graph_features_from_edge_attrs.csv", index=False)
 
 print(features_df.head(20))
+
