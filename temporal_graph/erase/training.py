@@ -243,8 +243,8 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
 
 def main():
     # Load data & graph
-    df = pd.read_csv("data/sy_dataset_1.csv", parse_dates=["claim_date"])
-    with open("data/temporal_graph_with_edge_attrs.gpickle", "rb") as f:
+    df = pd.read_csv("../data/sy_dataset_1.csv", parse_dates=["claim_date"])
+    with open("../data/temporal_graph_with_edge_attrs.gpickle", "rb") as f:
         G = pickle.load(f)
 
     labels = dict(zip(df["claim_id"].astype(str), df["is_fraud"].astype(int)))
