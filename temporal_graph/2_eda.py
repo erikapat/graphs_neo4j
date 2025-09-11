@@ -1,20 +1,20 @@
-# 04_explain_data_plots.py
+# 02_eda.py
 import os
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-IN_CSV     = "data/sy_dataset_1.csv"
-OUT_DIR    = "data/plots"
+IN_CSV = "data/sy_dataset_1.csv"
+OUT_DIR = "data/plots"
 EXPORT_DIR = "data/eda_exports"
 
 # =========================
 # Global style (bigger fonts)
 # =========================
-TITLE_FT  = 22
-LABEL_FT  = 18
-TICK_FT   = 16
+TITLE_FT = 22
+LABEL_FT = 18
+TICK_FT = 16
 LEGEND_FT = 16
 DEFAULT_FIGSIZE = (14, 6)
 
@@ -23,11 +23,12 @@ mpl.rcParams.update({
     "savefig.dpi": 200,
     "axes.titlesize": TITLE_FT,
     "figure.titlesize": TITLE_FT,
-    "axes.labelsize":  LABEL_FT,
+    "axes.labelsize": LABEL_FT,
     "xtick.labelsize": TICK_FT,
     "ytick.labelsize": TICK_FT,
     "legend.fontsize": LEGEND_FT,
 })
+
 
 def style_axes(ax, *, title=None, xlabel=None, ylabel=None):
     """Apply consistent labels/ticks/title to an axis."""
@@ -36,10 +37,12 @@ def style_axes(ax, *, title=None, xlabel=None, ylabel=None):
     if ylabel: ax.set_ylabel(ylabel, fontsize=LABEL_FT)
     ax.tick_params(axis="both", labelsize=TICK_FT)
 
+
 def style_twin(ax2, *, ylabel=None):
     """Consistent style for a twinx axis."""
     if ylabel: ax2.set_ylabel(ylabel, fontsize=LABEL_FT)
     ax2.tick_params(axis="both", labelsize=TICK_FT)
+
 
 # =========================
 # Utils
@@ -59,6 +62,7 @@ def gini_from_counts(counts: np.ndarray) -> float:
     gini = (n + 1 - 2 * (cum / cum[-1]).sum()) / n
     return float(gini)
 
+
 def lorenz_points(counts: np.ndarray):
     x = np.sort(np.asarray(counts, dtype=float))
     if x.sum() == 0:
@@ -70,6 +74,7 @@ def lorenz_points(counts: np.ndarray):
     ys = np.concatenate([[0], cum / cum[-1]])
     return xs, ys
 
+
 def top_k_table(df, key, k=20):
     grp = df.groupby(key).agg(
         n_claims=("is_fraud", "size"),
@@ -79,6 +84,7 @@ def top_k_table(df, key, k=20):
     ).reset_index()
     grp = grp.sort_values("n_claims", ascending=False).head(k)
     return grp
+
 
 def scatter_size_vs_rate(df, key, title, out_png):
     grp = df.groupby(key).agg(
@@ -95,6 +101,7 @@ def scatter_size_vs_rate(df, key, title, out_png):
     plt.close(fig)
     return grp
 
+
 def hist_reuse(df, key, title, out_png):
     counts = df.groupby(key)["claim_id"].size()
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
@@ -105,14 +112,15 @@ def hist_reuse(df, key, title, out_png):
     plt.close(fig)
     return counts
 
+
 def daily_rate_plot(df, title, out_png):
-    daily  = df.set_index("claim_date").resample("D")["is_fraud"].mean().rename("fraud_rate")
+    daily = df.set_index("claim_date").resample("D")["is_fraud"].mean().rename("fraud_rate")
     counts = df.set_index("claim_date").resample("D")["is_fraud"].size().rename("n_claims")
-    roll   = daily.rolling(7, min_periods=1).mean()
+    roll = daily.rolling(7, min_periods=1).mean()
 
     fig, ax1 = plt.subplots(figsize=DEFAULT_FIGSIZE)
     ax1.plot(daily.index, daily.values, label="Daily fraud rate")
-    ax1.plot(roll.index,  roll.values,  label="7D rolling", linewidth=2)
+    ax1.plot(roll.index, roll.values, label="7D rolling", linewidth=2)
     ax1.set_ylim(0, 1)
     style_axes(ax1, title=title, xlabel="Date", ylabel="Fraud rate")
     ax1.legend(loc="upper left")
@@ -124,6 +132,7 @@ def daily_rate_plot(df, title, out_png):
     fig.tight_layout()
     fig.savefig(out_png)
     plt.close(fig)
+
 
 def fraud_rate_by_entity_age(df, key, nbins=10, title_suffix="", out_png=""):
     """
@@ -161,6 +170,7 @@ def fraud_rate_by_entity_age(df, key, nbins=10, title_suffix="", out_png=""):
     plt.close(fig)
     return grp
 
+
 def cross_entity_overlap(df, key_a, key_b, reuse_thresh_a=5, reuse_thresh_b=5):
     """
     Mark 'high-reuse' entities (>= threshold claims) for two keys and
@@ -174,20 +184,21 @@ def cross_entity_overlap(df, key_a, key_b, reuse_thresh_a=5, reuse_thresh_b=5):
     mask_ha = df[key_a].isin(hi_a)
     mask_hb = df[key_b].isin(hi_b)
 
-    both  = df[ mask_ha &  mask_hb]
-    aonly = df[ mask_ha & ~mask_hb]
-    bonly = df[~mask_ha &  mask_hb]
-    none  = df[~mask_ha & ~mask_hb]
+    both = df[mask_ha & mask_hb]
+    aonly = df[mask_ha & ~mask_hb]
+    bonly = df[~mask_ha & mask_hb]
+    none = df[~mask_ha & ~mask_hb]
 
     result = {
-        "both":  {"n": len(both),  "rate": both["is_fraud"].mean() if len(both)>0 else 0.0},
-        "aonly":{"n": len(aonly), "rate": aonly["is_fraud"].mean() if len(aonly)>0 else 0.0},
-        "bonly":{"n": len(bonly), "rate": bonly["is_fraud"].mean() if len(bonly)>0 else 0.0},
-        "none": {"n": len(none),  "rate": none["is_fraud"].mean() if len(none)>0 else 0.0},
+        "both": {"n": len(both), "rate": both["is_fraud"].mean() if len(both) > 0 else 0.0},
+        "aonly": {"n": len(aonly), "rate": aonly["is_fraud"].mean() if len(aonly) > 0 else 0.0},
+        "bonly": {"n": len(bonly), "rate": bonly["is_fraud"].mean() if len(bonly) > 0 else 0.0},
+        "none": {"n": len(none), "rate": none["is_fraud"].mean() if len(none) > 0 else 0.0},
         "key_a": key_a, "key_b": key_b,
         "thr_a": reuse_thresh_a, "thr_b": reuse_thresh_b
     }
     return result
+
 
 def plot_lorenz(counts, title, out_png):
     xs, ys = lorenz_points(np.asarray(counts))
@@ -203,6 +214,7 @@ def plot_lorenz(counts, title, out_png):
     fig.savefig(out_png)
     plt.close(fig)
 
+
 # =========================
 # Main
 # =========================
@@ -212,7 +224,7 @@ def main():
 
     df = pd.read_csv(IN_CSV, parse_dates=["claim_date"])
     # Basic sanity
-    assert {"claim_id","claim_date","repair_shop","is_fraud"}.issubset(df.columns), \
+    assert {"claim_id", "claim_date", "repair_shop", "is_fraud"}.issubset(df.columns), \
         "CSV missing required columns."
 
     # 1) Base rate
@@ -234,8 +246,8 @@ def main():
     # Shops
     # =========================
     shop_grp = df.groupby("repair_shop").agg(
-        n_claims=("is_fraud","size"),
-        fraud_rate=("is_fraud","mean"),
+        n_claims=("is_fraud", "size"),
+        fraud_rate=("is_fraud", "mean"),
     ).reset_index()
 
     top = shop_grp.sort_values("n_claims", ascending=False).head(20) \
@@ -354,7 +366,7 @@ def main():
     # =========================
     # Concentration analysis (Lorenz & Gini) — shops, phones, plates, emails
     # =========================
-    g_shop  = gini_from_counts(phones_scatter["n_claims"].values)  # this line in your prior version was swapped
+    g_shop = gini_from_counts(phones_scatter["n_claims"].values)  # this line in your prior version was swapped
     g_phone = gini_from_counts(phones_scatter["n_claims"].values)
     g_plate = gini_from_counts(plates_scatter["n_claims"].values)
     g_email = gini_from_counts(emails_scatter["n_claims"].values)
@@ -388,13 +400,13 @@ def main():
 
     tmp = df.copy()
     tmp["share_phone"] = build_share_counts("insurer_phone_number")
-    tmp["share_shop"]  = build_share_counts("repair_shop")
+    tmp["share_shop"] = build_share_counts("repair_shop")
     tmp["share_plate"] = build_share_counts("insurer_license_plate")
     tmp["share_email"] = build_share_counts("insurer_email")
 
     for col, title, fn in [
         ("share_phone", "Other claims sharing same PHONE", "20_hist_share_phone.png"),
-        ("share_shop",  "Other claims sharing same SHOP",  "21_hist_share_shop.png"),
+        ("share_shop", "Other claims sharing same SHOP", "21_hist_share_shop.png"),
         ("share_plate", "Other claims sharing same PLATE", "22_hist_share_plate.png"),
         ("share_email", "Other claims sharing same EMAIL", "23_hist_share_email.png"),
     ]:
@@ -420,6 +432,7 @@ def main():
     print(shop_grp.sort_values('n_claims', ascending=False).head(5).to_string(index=False))
     print(f"Saved plots -> {OUT_DIR}")
     print(f"Saved tables -> {EXPORT_DIR}")
+
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-# 03_train_temporal.py — GraphSAGE embeddings + non-blocking plots saved to disk
+# 04: first attempt of train a temporal graph — GraphSAGE embeddings + non-blocking plots saved to disk
 import os
 import pickle
 import pandas as pd

@@ -1,5 +1,5 @@
 # call this as:
-# python explain_claim.py --claim-id 20000695 --cutoff 2024-01-08
+# python why.py --claim-id 20000695 --cutoff 2024-01-08
 import argparse
 import pickle
 from collections import defaultdict
@@ -25,7 +25,7 @@ def explain_claim(
         recent_days: int = 30,
 ) -> Dict[str, Any]:
     """
-    Human-readable explanation for why a claim looks risky, based on your graph + labels.
+    Explanation for why a claim looks risky, based on the graph + labels.
 
     Parameters
     ----------

@@ -1,4 +1,4 @@
-# app.py...
+# Streamlit code... like the 6th version
 import streamlit as st
 import pandas as pd
 import networkx as nx
@@ -230,5 +230,3 @@ else:
     ax.axis("off")
     ax.legend(markerscale=0.6, fontsize=8, loc="upper right")
     st.pyplot(fig)
-
-# (Feature tables removed as requested.)

@@ -1,4 +1,4 @@
-# 02_build_graph.py  (leak-safe: past -> future only)
+# 02_graph_creation.py  (leak-safe: past -> future only)
 import os
 import pickle
 import pandas as pd
@@ -10,12 +10,13 @@ ENTITY_COLUMNS = [
     "claim_location", "third_party_license_plate"
 ]
 
+
 def build_temporal_graph_with_edge_attrs(df, entity_cols):
     # ensure chronological processing
     df = df.sort_values("claim_date")
     G = nx.DiGraph()
-    seen_pairs = set()          # to avoid duplicate claim->claim edges
-    entity_index = {}           # (col, value) -> list of prior claim_ids using this entity
+    seen_pairs = set()  # to avoid duplicate claim->claim edges
+    entity_index = {}  # (col, value) -> list of prior claim_ids using this entity
 
     for _, row in df.iterrows():
         cid = row["claim_id"]
@@ -65,6 +66,7 @@ def build_temporal_graph_with_edge_attrs(df, entity_cols):
 
     return G
 
+
 def main():
     os.makedirs("data", exist_ok=True)
     df = pd.read_csv("data/sy_dataset_1.csv", parse_dates=["claim_date"])
@@ -75,6 +77,7 @@ def main():
 
     print("Saved: data/temporal_graph_with_edge_attrs.gpickle")
     print(f"nodes={G.number_of_nodes():,} edges={G.number_of_edges():,}")
+
 
 if __name__ == "__main__":
     main()

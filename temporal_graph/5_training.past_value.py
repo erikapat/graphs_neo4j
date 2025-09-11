@@ -1,4 +1,4 @@
-# 03_train_temporal.py — GraphSAGE with neighbor-based prior-fraud feature (no leakage)
+# 05 finbal version of train a temporal graph — GraphSAGE with neighbor-based prior-fraud feature (no leakage)
 # Non-blocking: saves all figures to outputs/figs/ (no plt.show)
 
 import os
@@ -13,6 +13,7 @@ from sklearn.manifold import TSNE
 
 # Use non-interactive backend to avoid blocking
 import matplotlib
+import torch
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -30,7 +31,6 @@ ENTITY_TYPES = [
 ]
 type_to_idx = {t: i for i, t in enumerate(ENTITY_TYPES)}
 
-import torch
 
 def describe_pyg_split(name: str, data):
     N = data.num_nodes
@@ -54,18 +54,20 @@ def describe_pyg_split(name: str, data):
     approx_undirected_ratio = rev_match / max(1, E)
 
     print(f"[{name}] nodes={N:,} edges={E:,} feats={D} claims={num_claims:,} pos_claims={num_pos:,}")
-    print(f"        isolated_nodes={num_isolated:,} self_loops={self_loops:,} approx_undirected_ratio={approx_undirected_ratio:.3f}")
+    print(
+        f"        isolated_nodes={num_isolated:,} self_loops={self_loops:,} approx_undirected_ratio={approx_undirected_ratio:.3f}")
+
 
 def describe_temporal_edges(G, cutoff):
     """Quick edge-type counts <= cutoff, using the original NetworkX graph."""
-    eligible = [(u,v,d) for u,v,d in G.edges(data=True)
+    eligible = [(u, v, d) for u, v, d in G.edges(data=True)
                 if d.get("timestamp") is not None and d["timestamp"] <= cutoff]
     by_type = {}
-    for _,_,d in eligible:
-        et = d.get("edge_type","<none>")
+    for _, _, d in eligible:
+        et = d.get("edge_type", "<none>")
         by_type[et] = by_type.get(et, 0) + 1
     total = sum(by_type.values())
-    pretty = ", ".join(f"{k}:{v:,}" for k,v in sorted(by_type.items()))
+    pretty = ", ".join(f"{k}:{v:,}" for k, v in sorted(by_type.items()))
     print(f"[edges ≤ {cutoff}] total={total:,} | {pretty}")
 
 
@@ -101,7 +103,8 @@ def build_temporal_data(G, labels_dict, cutoff):
     # entities that appear on eligible edges
     nodes_in_edges = set()
     for u, v, _ in eligible_edges:
-        nodes_in_edges.add(u); nodes_in_edges.add(v)
+        nodes_in_edges.add(u);
+        nodes_in_edges.add(v)
 
     keep_nodes = set(claim_nodes) | {
         n for n in nodes_in_edges if G.nodes[n].get("node_type") != "claim"
@@ -125,9 +128,9 @@ def build_temporal_data(G, labels_dict, cutoff):
     T = len(ENTITY_TYPES)
     und = H.to_undirected()
 
-    max_in  = max((H.in_degree(n)  for n in nodes), default=1)
+    max_in = max((H.in_degree(n) for n in nodes), default=1)
     max_out = max((H.out_degree(n) for n in nodes), default=1)
-    max_deg = max((und.degree(n)   for n in nodes), default=1)
+    max_deg = max((und.degree(n) for n in nodes), default=1)
 
     x = torch.zeros((len(nodes), T + 3 + 1), dtype=torch.float)  # +1 for prior
     y = torch.zeros((len(nodes),), dtype=torch.long)
@@ -152,9 +155,9 @@ def build_temporal_data(G, labels_dict, cutoff):
         # one-hot type
         x[i, type_to_idx.get(tname, 0)] = 1.0
         # normalized degrees
-        x[i, T + 0] = (H.in_degree(n)  / max_in)  if max_in  > 0 else 0.0
+        x[i, T + 0] = (H.in_degree(n) / max_in) if max_in > 0 else 0.0
         x[i, T + 1] = (H.out_degree(n) / max_out) if max_out > 0 else 0.0
-        x[i, T + 2] = (und.degree(n)   / max_deg) if max_deg > 0 else 0.0
+        x[i, T + 2] = (und.degree(n) / max_deg) if max_deg > 0 else 0.0
 
         if tname == "claim":
             claim_mask[i] = True
@@ -490,11 +493,10 @@ def main():
     describe_temporal_edges(G, t_train_end)
     describe_pyg_split("train", data_train)
     describe_temporal_edges(G, t_val_end)
-    describe_pyg_split("val",   data_val)
+    describe_pyg_split("val", data_val)
     describe_temporal_edges(G, t_test_end)
-    describe_pyg_split("test",  data_test)
+    describe_pyg_split("test", data_test)
     print('End Graph statistics')
-
 
     # Train/validate/test (non-blocking saves)
     _model, _lift_rows, _metrics = train_eval_temporal(

@@ -2,7 +2,6 @@
 # End-to-end leakage checks with printed diagnostics.
 
 import os
-import sys
 import json
 import argparse
 import pickle
@@ -17,6 +16,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 from torch_geometric.utils import add_self_loops
 
+
 # ------------------------------ Determinism ----------------------------------
 
 def seed_all(s=42):
@@ -27,6 +27,7 @@ def seed_all(s=42):
     torch.cuda.manual_seed_all(s)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
 
 # ------------------------------ Utilities ------------------------------------
 
@@ -43,6 +44,7 @@ ENTITY_TYPES = [
 ]
 type_to_idx = {t: i for i, t in enumerate(ENTITY_TYPES)}
 
+
 def confusion_and_metrics(y_true, y_pred):
     tp = ((y_true == 1) & (y_pred == 1)).sum().item()
     tn = ((y_true == 0) & (y_pred == 0)).sum().item()
@@ -55,6 +57,7 @@ def confusion_and_metrics(y_true, y_pred):
     return {"acc": acc, "precision": prec, "recall": rec, "f1": f1,
             "tp": tp, "fp": fp, "tn": tn, "fn": fn}
 
+
 def best_threshold_by_f1(y_true, probs, grid=None):
     if grid is None:
         grid = torch.linspace(0.05, 0.95, steps=19)
@@ -65,6 +68,7 @@ def best_threshold_by_f1(y_true, probs, grid=None):
         if m["f1"] > best_f1:
             best_f1, best_t = m["f1"], float(t)
     return best_t, best_f1
+
 
 # For temporal direction checks, we need a notion of "node time".
 def compute_node_time(G: nx.DiGraph):
@@ -83,9 +87,11 @@ def compute_node_time(G: nx.DiGraph):
             node_time[n] = min(ts) if ts else None
     return node_time
 
+
 # ------------------------------ Data builders --------------------------------
 
-def build_temporal_data_variant(G, labels_dict, cutoff, edge_mode='undirected', use_prior=True, prior_alpha=1.0, prior_beta=3.0):
+def build_temporal_data_variant(G, labels_dict, cutoff, edge_mode='undirected', use_prior=True, prior_alpha=1.0,
+                                prior_beta=3.0):
     """
     edge_mode: 'undirected' | 'forward' | 'backward'
       - forward: past -> future only (safe)
@@ -108,7 +114,8 @@ def build_temporal_data_variant(G, labels_dict, cutoff, edge_mode='undirected', 
     # nodes appearing on eligible edges (entities)
     nodes_in_edges = set()
     for u, v, _ in eligible_edges:
-        nodes_in_edges.add(u); nodes_in_edges.add(v)
+        nodes_in_edges.add(u);
+        nodes_in_edges.add(v)
     keep_nodes = set(claim_nodes) | {n for n in nodes_in_edges if G.nodes[n].get("node_type") != "claim"}
 
     # deterministic subgraph
@@ -122,7 +129,7 @@ def build_temporal_data_variant(G, labels_dict, cutoff, edge_mode='undirected', 
             return True
         if tu is None or tv is None:
             return False
-        if edge_mode == 'forward':   # past -> future
+        if edge_mode == 'forward':  # past -> future
             return tu <= tv
         if edge_mode == 'backward':  # future -> past
             return tu >= tv
@@ -138,27 +145,33 @@ def build_temporal_data_variant(G, labels_dict, cutoff, edge_mode='undirected', 
     # features
     T = len(ENTITY_TYPES)
     und = H.to_undirected()
-    max_in  = max((H.in_degree(n)  for n in nodes), default=1)
+    max_in = max((H.in_degree(n) for n in nodes), default=1)
     max_out = max((H.out_degree(n) for n in nodes), default=1)
-    max_deg = max((und.degree(n)   for n in nodes), default=1)
+    max_deg = max((und.degree(n) for n in nodes), default=1)
 
     x = torch.zeros((len(nodes), T + 3 + 1), dtype=torch.float)  # +1 for prior
     y = torch.zeros((len(nodes),), dtype=torch.long)
     claim_mask = torch.zeros((len(nodes),), dtype=torch.bool)
 
-    def node_label(n): return int(labels_dict.get(str(n), 0))
-    def claim_time(n): return H.nodes[n].get("claim_date", None)
+    def node_label(n):
+        return int(labels_dict.get(str(n), 0))
+
+    def claim_time(n):
+        return H.nodes[n].get("claim_date", None)
+
     def decision_time(n):
         nd = H.nodes[n]
         return nd.get("decision_date", nd.get("claim_date", None))
 
     # base features + labels
     for n in nodes:
-        i = nid[n]; attrs = H.nodes[n]; tname = attrs.get("node_type", "claim")
+        i = nid[n];
+        attrs = H.nodes[n];
+        tname = attrs.get("node_type", "claim")
         x[i, type_to_idx.get(tname, 0)] = 1.0
-        x[i, T + 0] = (H.in_degree(n)  / max_in)  if max_in  > 0 else 0.0
+        x[i, T + 0] = (H.in_degree(n) / max_in) if max_in > 0 else 0.0
         x[i, T + 1] = (H.out_degree(n) / max_out) if max_out > 0 else 0.0
-        x[i, T + 2] = (und.degree(n)   / max_deg) if max_deg > 0 else 0.0
+        x[i, T + 2] = (und.degree(n) / max_deg) if max_deg > 0 else 0.0
         if tname == "claim":
             claim_mask[i] = True
             y[i] = node_label(n)
@@ -214,6 +227,7 @@ def build_temporal_data_variant(G, labels_dict, cutoff, edge_mode='undirected', 
 
     return Data(x=x, edge_index=edge_index, y=y, claim_mask=claim_mask)
 
+
 # ------------------------------ Model & Train --------------------------------
 
 class GraphSAGE(torch.nn.Module):
@@ -226,10 +240,15 @@ class GraphSAGE(torch.nn.Module):
 
     def forward(self, data):
         x, ei = data.x, data.edge_index
-        x = self.conv1(x, ei); x = F.relu(x); x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.conv2(x, ei); x = F.relu(x); x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.conv1(x, ei);
+        x = F.relu(x);
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.conv2(x, ei);
+        x = F.relu(x);
+        x = F.dropout(x, p=self.dropout, training=self.training)
         out = self.conv3(x, ei)
         return out
+
 
 def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, seed=42, outdir="outputs"):
     seed_all(seed)
@@ -252,7 +271,9 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
         model.train()
         logits_tr = model(train_data)
         loss = crit(logits_tr[train_ids], train_data.y[train_ids])
-        opt.zero_grad(); loss.backward(); opt.step()
+        opt.zero_grad();
+        loss.backward();
+        opt.step()
 
         model.eval()
         with torch.no_grad():
@@ -264,7 +285,8 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
             mva = confusion_and_metrics(val_data.y[val_ids], pred_va)
 
         if mva["f1"] > best_val_f1:
-            best_val_f1 = mva["f1"]; best_t = t_star
+            best_val_f1 = mva["f1"];
+            best_t = t_star
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
             bad = 0
         else:
@@ -297,16 +319,17 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
           f"cm=[tp:{m['tp']} fp:{m['fp']} tn:{m['tn']} fn:{m['fn']}]")
     return model, None, m
 
+
 # ------------------------------ Leakage Suite --------------------------------
 
 def run_leakage_tests(G, df, epochs=180, lr=0.01, outdir="outputs"):
     seed_all(42)
     labels = dict(zip(df["claim_id"].astype(str), df["is_fraud"].astype(int)))
     q_train = df["claim_date"].quantile(0.70)
-    q_val   = df["claim_date"].quantile(0.85)
+    q_val = df["claim_date"].quantile(0.85)
     t_train_end = pd.Timestamp(q_train).to_pydatetime()
-    t_val_end   = pd.Timestamp(q_val).to_pydatetime()
-    t_test_end  = df["claim_date"].max().to_pydatetime()
+    t_val_end = pd.Timestamp(q_val).to_pydatetime()
+    t_test_end = df["claim_date"].max().to_pydatetime()
 
     print("Temporal cutoffs:")
     print("  Train ≤", t_train_end)
@@ -315,8 +338,8 @@ def run_leakage_tests(G, df, epochs=180, lr=0.01, outdir="outputs"):
 
     def build_all(edge_mode='undirected', use_prior=True, lbls=labels):
         dtr = build_temporal_data_variant(G, lbls, cutoff=t_train_end, edge_mode=edge_mode, use_prior=use_prior)
-        dva = build_temporal_data_variant(G, lbls, cutoff=t_val_end,   edge_mode=edge_mode, use_prior=use_prior)
-        dte = build_temporal_data_variant(G, lbls, cutoff=t_test_end,  edge_mode=edge_mode, use_prior=use_prior)
+        dva = build_temporal_data_variant(G, lbls, cutoff=t_val_end, edge_mode=edge_mode, use_prior=use_prior)
+        dte = build_temporal_data_variant(G, lbls, cutoff=t_test_end, edge_mode=edge_mode, use_prior=use_prior)
         return dtr, dva, dte
 
     results = {}
@@ -362,21 +385,21 @@ def run_leakage_tests(G, df, epochs=180, lr=0.01, outdir="outputs"):
     def verdict(a, b, c, d, e):
         msgs = []
         if abs(a["f1"] - b["f1"]) <= 0.02:
-            msgs.append("✅ Forward-only ≈ Baseline → low temporal bleed.")
+            msgs.append("Forward-only ≈ Baseline → low temporal bleed.")
         else:
-            msgs.append("⚠️  Forward-only ≠ Baseline → directionality matters; check undirected edges.")
+            msgs.append("Forward-only ≠ Baseline → directionality matters; check undirected edges.")
         if b["f1"] > c["f1"] + 0.05:
-            msgs.append("✅ Prior helps but is not sole signal (forward no-prior drops).")
+            msgs.append("Prior helps but is not sole signal (forward no-prior drops).")
         else:
-            msgs.append("⚠️  Prior ablation didn't drop much → structure may dominate; re-check features.")
+            msgs.append("️  Prior ablation didn't drop much → structure may dominate; re-check features.")
         if d["f1"] < 0.15:
-            msgs.append("✅ Backward-only ≈ random → good (no future→past info).")
+            msgs.append(" Backward-only ≈ random → good (no future→past info).")
         else:
-            msgs.append("❌ Backward-only strong → leakage very likely.")
+            msgs.append(" Backward-only strong → leakage very likely.")
         if e["f1"] < 0.15:
-            msgs.append("✅ Train label shuffle killed performance on val/test → training behaves properly.")
+            msgs.append(" Train label shuffle killed performance on val/test → training behaves properly.")
         else:
-            msgs.append("❌ Label shuffle still high → leakage/miscalibration likely.")
+            msgs.append(" Label shuffle still high → leakage/miscalibration likely.")
         return msgs
 
     msgs = verdict(results["A_baseline_undirected+prior"],
@@ -390,17 +413,18 @@ def run_leakage_tests(G, df, epochs=180, lr=0.01, outdir="outputs"):
 
     return results
 
+
 # ---------------------------------- Main -------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Leakage diagnostics for temporal GraphSAGE.")
-    parser.add_argument("--csv",   default="data/sy_dataset_1.csv",
+    parser.add_argument("--csv", default="data/sy_dataset_1.csv",
                         help="Path to claims CSV (must include claim_id, is_fraud, claim_date).")
     parser.add_argument("--graph", default="data/temporal_graph_with_edge_attrs.gpickle",
                         help="Path to NetworkX gpickle with edge timestamps.")
-    parser.add_argument("--out",   default="outputs", help="Output directory.")
+    parser.add_argument("--out", default="outputs", help="Output directory.")
     parser.add_argument("--epochs", type=int, default=220, help="Training epochs per scenario.")
-    parser.add_argument("--lr",     type=float, default=0.01, help="Learning rate.")
+    parser.add_argument("--lr", type=float, default=0.01, help="Learning rate.")
     args = parser.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -423,7 +447,6 @@ def main():
         json.dump(results, fp, indent=2)
     print(f"\nSaved leakage test summary to: {summary_path}")
 
+
 if __name__ == "__main__":
     main()
-
-
