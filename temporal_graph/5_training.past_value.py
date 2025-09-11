@@ -5,7 +5,6 @@ import os
 import pickle
 import pandas as pd
 import networkx as nx
-import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
@@ -31,55 +30,106 @@ ENTITY_TYPES = [
 ]
 type_to_idx = {t: i for i, t in enumerate(ENTITY_TYPES)}
 
+import torch
+
+def describe_pyg_split(name: str, data):
+    N = data.num_nodes
+    E = int(data.edge_index.size(1))
+    D = data.num_node_features
+    # claim nodes & positives (labels only meaningful on claims)
+    claim_ids = torch.where(data.claim_mask)[0]
+    num_claims = int(claim_ids.numel())
+    num_pos = int((data.y[claim_ids] == 1).sum().item())
+    # isolated nodes (no in & no out)
+    deg = torch.bincount(data.edge_index.flatten(), minlength=N)
+    num_isolated = int((deg == 0).sum().item())
+    # self-loops
+    self_loops = int((data.edge_index[0] == data.edge_index[1]).sum().item())
+    # (optional) directedness heuristic: how many (u,v) also have (v,u)?
+    ei = data.edge_index
+    key = (ei[0] * N + ei[1]).cpu()
+    rev = (ei[1] * N + ei[0]).cpu()
+    undup = set(key.tolist())
+    rev_match = sum((rk in undup) for rk in rev.tolist())
+    approx_undirected_ratio = rev_match / max(1, E)
+
+    print(f"[{name}] nodes={N:,} edges={E:,} feats={D} claims={num_claims:,} pos_claims={num_pos:,}")
+    print(f"        isolated_nodes={num_isolated:,} self_loops={self_loops:,} approx_undirected_ratio={approx_undirected_ratio:.3f}")
+
+def describe_temporal_edges(G, cutoff):
+    """Quick edge-type counts <= cutoff, using the original NetworkX graph."""
+    eligible = [(u,v,d) for u,v,d in G.edges(data=True)
+                if d.get("timestamp") is not None and d["timestamp"] <= cutoff]
+    by_type = {}
+    for _,_,d in eligible:
+        et = d.get("edge_type","<none>")
+        by_type[et] = by_type.get(et, 0) + 1
+    total = sum(by_type.values())
+    pretty = ", ".join(f"{k}:{v:,}" for k,v in sorted(by_type.items()))
+    print(f"[edges ≤ {cutoff}] total={total:,} | {pretty}")
+
 
 # ---------- Build temporal subgraph (adds prior-fraud-from-neighbors only) ----------
 def build_temporal_data(G, labels_dict, cutoff):
     """
-    Features per node:
+    Build a temporal PyG Data object from G using edges with timestamp <= cutoff.
+    Assumes G contains only:
+      - entity -> claim edges (timestamp = claim_date)
+      - older_claim -> newer_claim edges (timestamp = newer claim_date)
+
+    Node features (per node):
       - one-hot(node_type)                        [len(ENTITY_TYPES)]
-      - normalized in/out/undeg degrees          [3]
+      - normalized in/out/undirected degrees     [3]
       - prior_fraud_from_neighbors (claims only) [1]
-        = fraction of connected *older* claims that are fraud
-          (older = claim_date(neighbor) < claim_date(current)
-           and, if available, decision_date(neighbor) ≤ claim_date(current))
+        = fraction of predecessor *older* claims that are fraud
+          (and, if available, with decision_date <= current claim_date)
+
+    Labels live only on claim nodes; `claim_mask` identifies them.
     """
-    # Claims up to cutoff
-    claim_nodes = [n for n, d in G.nodes(data=True)
-                   if d.get("node_type") == "claim" and d.get("claim_date") <= cutoff]
+    # ---- select nodes/edges up to cutoff (deterministic) --------------------
+    eligible_edges = [
+        (u, v, d) for u, v, d in G.edges(data=True)
+        if d.get("timestamp") is not None and d["timestamp"] <= cutoff
+    ]
 
-    # Edges up to cutoff (edges store 'timestamp' = link_date)
-    eligible_edges = [(u, v, d) for u, v, d in G.edges(data=True)
-                      if d.get("timestamp") is not None and d["timestamp"] <= cutoff]
+    # claims present up to cutoff
+    claim_nodes = [
+        n for n, a in G.nodes(data=True)
+        if a.get("node_type") == "claim" and a.get("claim_date") is not None and a["claim_date"] <= cutoff
+    ]
 
-    # Nodes present in those edges (incl. entities)
+    # entities that appear on eligible edges
     nodes_in_edges = set()
     for u, v, _ in eligible_edges:
-        nodes_in_edges.add(u);
-        nodes_in_edges.add(v)
+        nodes_in_edges.add(u); nodes_in_edges.add(v)
 
-    keep_nodes = set(claim_nodes) | {n for n in nodes_in_edges if G.nodes[n].get("node_type") != "claim"}
+    keep_nodes = set(claim_nodes) | {
+        n for n in nodes_in_edges if G.nodes[n].get("node_type") != "claim"
+    }
 
-    # Subgraph H
+    # ---- build subgraph H with sorted insertion (stable) --------------------
     H = nx.DiGraph()
-    for n in keep_nodes:
+    for n in sorted(keep_nodes, key=str):
         H.add_node(n, **G.nodes[n])
-    for u, v, d in eligible_edges:
+
+    # keep eligible edges among kept nodes (already time-safe by construction)
+    for u, v, d in sorted(eligible_edges, key=lambda e: (str(e[0]), str(e[1]), e[2].get("timestamp"))):
         if u in keep_nodes and v in keep_nodes:
             H.add_edge(u, v, **d)
 
-    # Map nodes
-    nodes = list(H.nodes())
+    # deterministic node list / id map
+    nodes = sorted(H.nodes(), key=str)
     nid = {n: i for i, n in enumerate(nodes)}
 
-    # Degrees for structural features
+    # ---- features/labels ----------------------------------------------------
     T = len(ENTITY_TYPES)
     und = H.to_undirected()
-    max_in = max((H.in_degree(n) for n in nodes), default=1)
-    max_out = max((H.out_degree(n) for n in nodes), default=1)
-    max_deg = max((und.degree(n) for n in nodes), default=1)
 
-    # Feature dim = types + 3 degrees + 1 neighbor-prior-fraud
-    x = torch.zeros((len(nodes), T + 3 + 1), dtype=torch.float)
+    max_in  = max((H.in_degree(n)  for n in nodes), default=1)
+    max_out = max((H.out_degree(n) for n in nodes), default=1)
+    max_deg = max((und.degree(n)   for n in nodes), default=1)
+
+    x = torch.zeros((len(nodes), T + 3 + 1), dtype=torch.float)  # +1 for prior
     y = torch.zeros((len(nodes),), dtype=torch.long)
     claim_mask = torch.zeros((len(nodes),), dtype=torch.bool)
 
@@ -93,25 +143,28 @@ def build_temporal_data(G, labels_dict, cutoff):
         nd = H.nodes[n]
         return nd.get("decision_date", nd.get("claim_date", None))
 
-    # Pass 1: base features + labels/mask
-    for n, attrs in H.nodes(data=True):
+    # pass 1: base features + labels/mask
+    for n in nodes:
         i = nid[n]
-        t = attrs.get("node_type", "claim")
+        attrs = H.nodes[n]
+        tname = attrs.get("node_type", "claim")
 
-        x[i, type_to_idx.get(t, 0)] = 1.0
-        x[i, T + 0] = (H.in_degree(n) / max_in) if max_in > 0 else 0.0
+        # one-hot type
+        x[i, type_to_idx.get(tname, 0)] = 1.0
+        # normalized degrees
+        x[i, T + 0] = (H.in_degree(n)  / max_in)  if max_in  > 0 else 0.0
         x[i, T + 1] = (H.out_degree(n) / max_out) if max_out > 0 else 0.0
-        x[i, T + 2] = (und.degree(n) / max_deg) if max_deg > 0 else 0.0
+        x[i, T + 2] = (und.degree(n)   / max_deg) if max_deg > 0 else 0.0
 
-        if t == "claim":
+        if tname == "claim":
             claim_mask[i] = True
             y[i] = node_label(n)
         else:
             y[i] = 0
 
-    # Pass 2: compute prior_fraud_from_neighbors for claims (no self leakage)
-    for n, attrs in H.nodes(data=True):
-        if attrs.get("node_type") != "claim":
+    # pass 2: prior_fraud_from_neighbors for claims (predecessor claims only)
+    for n in nodes:
+        if H.nodes[n].get("node_type") != "claim":
             continue
         i = nid[n]
         t_cur = claim_time(n)
@@ -119,48 +172,37 @@ def build_temporal_data(G, labels_dict, cutoff):
             x[i, T + 3] = 0.0
             continue
 
-        older_claims = set()
-
-        # a) direct predecessors (claim->claim are prior→current by construction)
+        older_claims = []
+        # only direct predecessors (which, by construction, are older claims
+        # that share an entity or a claim→claim edge)
         for p in H.predecessors(n):
             if H.nodes[p].get("node_type") == "claim":
                 t_p = claim_time(p)
                 if t_p is not None and t_p < t_cur:
-                    older_claims.add(p)
+                    # keep only if decided <= current time (when available)
+                    d_p = decision_time(p)
+                    if d_p is None or d_p <= t_cur:
+                        older_claims.append(p)
 
-        # b) 2-hop claim–entity–claim older than current
-        for e in H.predecessors(n):
-            if H.nodes[e].get("node_type") != "claim":
-                for p in H.predecessors(e):
-                    if H.nodes[p].get("node_type") == "claim":
-                        t_p = claim_time(p)
-                        if t_p is not None and t_p < t_cur:
-                            older_claims.add(p)
-
-        # keep only neighbors whose decision_date ≤ t_cur (if available)
-        decided_older = []
-        for p in older_claims:
-            d_p = decision_time(p)
-            if d_p is None or d_p <= t_cur:
-                decided_older.append(p)
-
-        if decided_older:
-            frac = sum(node_label(p) for p in decided_older) / float(len(decided_older))
+        if older_claims:
+            frac = sum(node_label(p) for p in older_claims) / float(len(older_claims))
         else:
             frac = 0.0
 
         x[i, T + 3] = float(frac)
 
-    # Build edge_index (includes claim→claim, claim↔entity)
-    src, dst = [], []
-    for u, v in H.edges():
-        src.append(nid[u]);
-        dst.append(nid[v])
-    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    # ---- edge_index (deterministic order) -----------------------------------
+    pairs = [(nid[u], nid[v]) for u, v in H.edges()]
+    if pairs:
+        src, dst = zip(*sorted(pairs))
+        edge_index = torch.tensor([src, dst], dtype=torch.long)
+    else:
+        edge_index = torch.empty((2, 0), dtype=torch.long)
+
+    # self-loops are fine and do not affect temporal direction
     edge_index, _ = add_self_loops(edge_index, num_nodes=len(nodes))
 
-    data = Data(x=x, edge_index=edge_index, y=y, claim_mask=claim_mask)
-    return data
+    return Data(x=x, edge_index=edge_index, y=y, claim_mask=claim_mask)
 
 
 # ---------- Model ----------
@@ -174,11 +216,11 @@ class GraphSAGE(torch.nn.Module):
 
     def forward(self, data, return_embeddings: bool = False):
         x, ei = data.x, data.edge_index
-        x = self.conv1(x, ei);
-        x = F.relu(x);
+        x = self.conv1(x, ei)
+        x = F.relu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
-        h = self.conv2(x, ei);
-        h = F.relu(h);
+        h = self.conv2(x, ei)
+        h = F.relu(h)
         h = F.dropout(h, p=self.dropout, training=self.training)
         if return_embeddings:
             return h  # penultimate layer embeddings
@@ -263,9 +305,10 @@ def save_tsne_embeddings(h_claim: torch.Tensor, y_claim: torch.Tensor, outpath, 
     z = h_claim.detach().cpu().numpy();
     y = y_claim.detach().cpu().numpy()
     perplexity = min(30, max(5, len(z) // 50)) if len(z) > 100 else min(30, max(5, len(z) // 3))
+    print('Calculating T-SNE')
     tsne = TSNE(n_components=2, perplexity=perplexity,
                 init="pca",
-                n_iter=10000,  # More iterations for convergence
+                n_iter=3000,  # More iterations for convergence
                 learning_rate=1500,  # Higher learning rate for sharper clusters
                 random_state=25,
                 # learning_rate="auto"
@@ -306,8 +349,10 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
     torch.manual_seed(seed)
 
     # dirs for non-blocking figure output
-    figs_dir = os.path.join(outdir, "figs")
+    figs_dir = os.path.join(outdir, "figs_model_5")
+    tables_dir = os.path.join(outdir, "tables_model_5")
     os.makedirs(figs_dir, exist_ok=True)
+    os.makedirs(tables_dir, exist_ok=True)
 
     train_ids = torch.where(train_data.claim_mask)[0]
     counts = torch.bincount(train_data.y[train_ids], minlength=2)
@@ -407,6 +452,10 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
     print("\nSimilar claims to the selected (fraudulent) claim:")
     print(df_sim.to_string(index=False))
 
+    sim_csv = os.path.join(tables_dir, "similar_claims_graphsage.csv")
+    df_sim.to_csv(sim_csv, index=False)
+    print(f"[saved] {sim_csv}")
+
     return model, rows, m
 
 
@@ -435,6 +484,17 @@ def main():
     data_train = build_temporal_data(G, labels, cutoff=t_train_end)
     data_val = build_temporal_data(G, labels, cutoff=t_val_end)
     data_test = build_temporal_data(G, labels, cutoff=t_test_end)
+
+    # Summaries for graph dataset
+    print('Graph statistics')
+    describe_temporal_edges(G, t_train_end)
+    describe_pyg_split("train", data_train)
+    describe_temporal_edges(G, t_val_end)
+    describe_pyg_split("val",   data_val)
+    describe_temporal_edges(G, t_test_end)
+    describe_pyg_split("test",  data_test)
+    print('End Graph statistics')
+
 
     # Train/validate/test (non-blocking saves)
     _model, _lift_rows, _metrics = train_eval_temporal(

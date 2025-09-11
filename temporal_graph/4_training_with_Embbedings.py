@@ -277,8 +277,8 @@ def train_eval_temporal(train_data, val_data, test_data, epochs=220, lr=0.01, se
                         outdir="data"):
     torch.manual_seed(seed)
     os.makedirs(outdir, exist_ok=True)
-    figs_dir = os.path.join(outdir, "figs_model")
-    tables_dir = os.path.join(outdir, "tables_model")
+    figs_dir = os.path.join(outdir, "figs_model_4")
+    tables_dir = os.path.join(outdir, "tables_model_4")
     os.makedirs(figs_dir, exist_ok=True)
     os.makedirs(tables_dir, exist_ok=True)
 
