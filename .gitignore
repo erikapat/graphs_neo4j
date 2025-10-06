@@ -1,3 +1,80 @@
 .env
 */.DS_Store
 .DS_Store
+
+# ---------------- Python básico ----------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.pytest_cache/
+.ipynb_checkpoints/
+
+# ---------------- Entornos virtuales ----------------
+.venv*/
+venv*/
+ENV*/
+*/site-packages/
+
+# ---------------- Datos y artefactos pesados ----------------
+data/
+datasets/
+checkpoints/
+models/
+*.pt
+*.safetensors
+*.ckpt
+*.onnx
+*.h5
+*.joblib
+*.pkl
+*.npy
+*.npz
+*.parquet
+*.feather
+*.csv.gz
+
+# ---------------- Binarios / librerías compiladas ----------------
+*.dylib
+*.so
+*.dll
+*.whl
+
+# ---------------- Comprimidos / dumps ----------------
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# ---------------- Logs / cache externas ----------------
+*.log
+logs/
+wandb/
+mlruns/
+ray_results/
+
+# ---------------- Figuras generadas por el script ----------------
+# (El script guarda en ./figs/YYYYMMDD_HHMMSS. Si quieres versionar algunas,
+#  borra estas líneas. Alternativa: deja un figs/.gitkeep para la carpeta)
+figs/
+!figs/.gitkeep
+
+# ---------------- IDE / OS ----------------
+# VS Code
+.vscode/
+# PyCharm
+.idea/
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---------------- Otros ----------------
+# Si usas Git LFS para artefactos concretos, configúralo en .gitattributes
+# y NO dejes de ignorar entornos y site-packages.
