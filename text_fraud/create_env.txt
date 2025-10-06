@@ -1,0 +1,11 @@
+python3.11 -m venv .venv_opt
+source .venv_opt/bin/activate
+
+
+# 2) Install with the SAME interpreter
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+#eliminate
+#rm -rf .venv_graphs
+
