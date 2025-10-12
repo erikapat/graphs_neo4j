@@ -49,7 +49,7 @@ class Config:
     kmeans_override_k: Optional[int] = None
 
     # FAST mode (default): train LogisticRegression on frozen embeddings
-    fast_linear: bool = True
+    fast_linear: bool = False
 
     # (Unused when fast_linear=True; kept for parity)
     setfit_num_epochs: int = 2

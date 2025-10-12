@@ -1,0 +1,31 @@
+# ---- Core numerical / data ----
+numpy<2.0
+pandas>=2.1,<2.3
+scikit-learn>=1.3,<1.5
+matplotlib==3.8.3
+
+# ---- Embeddings & HF stack ----
+transformers>=4.41,<4.46
+huggingface_hub>=0.20,<0.25
+tokenizers>=0.15,<0.20
+sentencepiece>=0.1.99
+
+# ---- Torch (CPU by default) ----
+# 2.2.x has broad wheels and works with safetensors (the code prefers safetensors).
+# If you must load legacy .bin checkpoints directly with torch.load, upgrade to 2.6+.
+torch>=2.2,<2.6
+
+# ---- Topic modeling ----
+umap-learn<0.6
+hdbscan<0.9
+bertopic>=0.16,<0.17
+
+# ---- Optional: Parquet writer (pipeline falls back to CSV if missing) ----
+pyarrow>=15 ; extra == "parquet"
+
+# ---- Optional: spaCy (for better phrase mining; otherwise regex fallback is used) ----
+spacy>=3.7,<3.8 ; extra == "spacy"
+
+
+
+
