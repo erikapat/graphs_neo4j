@@ -1,0 +1,314 @@
+\documentclass[11pt]{article}
+
+% ----------------------- Fonts & math -----------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,mathtools,bm}
+
+% ----------------------- Page & links -----------------------------
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+% ----------------------- Shortcuts / notation ---------------------
+\newcommand{\A}{\mathcal{A}}                 % set of brokers/agencies
+\newcommand{\C}{\mathcal{C}}                 % set of buckets
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\onesA}{\mathbf{1}_{\A}}         % ones over agencies
+\newcommand{\onesC}{\mathbf{1}_{\C}}         % ones over buckets
+\newcommand{\vecop}{\mathrm{vec}}            % vectorization operator
+
+% ----------------------- Title -----------------------------------
+\title{Optimization Algorithm (ILP): Policy-to-Broker Assignment}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Problem statement}
+
+\paragraph{Sets and data.}
+\[
+\A=\{\text{brokers/agencies}\},\qquad
+\C=\{\text{good},\,\text{fair},\,\text{bad}\}.
+\]
+\[
+W=\big[W_{a,c}\big]_{a\in\A,\;c\in\C}\ \text{(productivity weights)},\qquad
+U=\big[U_a\big]_{a\in\A}\ \text{(per-agency capacity)}.
+\]
+
+\[
+x_{a,c} \in \mathbb{Z}_{\ge 0} \qquad \forall a \in A,\, \forall c \in C
+\]
+
+
+\[
+x_{a,c} \in \mathbb{Z}_{\ge 0},\quad a\in A,\ c\in C := \{\text{Gold},\ \text{Silver},\ \text{Bronze}\};\qquad
+X \in \mathbb{Z}_{\ge 0}^{m\times p};\qquad
+W \in \mathbb{R}_{\ge 0}^{m\times p}.
+\]
+
+
+\paragraph{Decision variables.}
+\[
+X=\big[X_{a,c}\big]_{a\in\A,\;c\in\C},\qquad
+X_{a,c}\in \Z_{\ge 0}\ \ \text{(policies assigned to broker $a$ in bucket $c$)}.
+\]
+
+\paragraph{Objective (maximize total productivity).}
+\begin{equation*}
+\max\ \ \langle W,X\rangle
+\;=\;
+\sum_{a\in\A}\sum_{c\in\C} W_{a,c}\,X_{a,c}.
+\end{equation*}
+
+\paragraph{Constraints.}
+\begin{align*}
+\text{Per-broker capacity:}\quad
+& \sum_{c\in\C} X_{a,c} \;\le\; U_a,
+& \forall a\in\A
+\\[4pt]
+\text{Global conservation:}\quad
+& \sum_{a\in\A}\sum_{c\in\C} X_{a,c} \;=\; U_{\mathrm{tot}}
+\ \ (\text{or }U_{\mathrm{tot}}+1\ \text{in online mode}),
+\\[4pt]
+\text{Bucket mix (optional):}\quad
+& L^{\text{bucket}}_c \ \le\ \sum_{a\in\A} X_{a,c}\ \le\ U^{\text{bucket}}_c,
+& \forall c\in\C
+\\[4pt]
+\text{No decreases (online):}\quad
+& \sum_{c\in\C} X_{a,c} \ \ge\ L^{\text{(batch)}}_a,
+& \forall a\in\A
+\\[4pt]
+\text{ZIP lock (online, if inadmissible):}\quad
+& \sum_{c\in\C} X_{a,c} \;=\; L^{\text{(Batch)}}_a,
+& \forall a\in\A\ \text{inadmissible.}
+\end{align*}
+
+\section{Constraints (all in matrix form)}
+
+Let $\mathbf{1}_A\in\R^{|\A|}$ and $\mathbf{1}_C\in\R^{|\C|}$ be all-ones vectors.
+
+\begin{itemize}[leftmargin=*]
+
+\item \textbf{Per-agency capacity.} Row sums are $X\,\mathbf{1}_C$. Require
+\begin{equation*}
+X\,\mathbf{1}_C \;\le\; U.
+\end{equation*}
+
+\item \textbf{Global conservation.} 
+
+Total assigned equals inventory 
+$U_{\mathrm{tot}}=\mathbf{1}_A^\top U$ (batch) or $U_{\mathrm{tot}}+1$ (online):
+\begin{equation*}
+\mathbf{1}_A^\top X\,\mathbf{1}_C \;=\; U_{\mathrm{tot}}
+\quad\text{(batch)}
+\qquad\text{or}\qquad
+\mathbf{1}_A^\top X\,\mathbf{1}_C \;=\; U_{\mathrm{tot}} + 1
+\quad\text{(online)}.
+\end{equation*}
+
+\item \textbf{Bucket mix (optional).} With bounds 
+$L^{\text{bucket}},\,U^{\text{bucket}} \in \mathbb{R}^{|\C|}$ and column sums $X^\top \mathbf{1}_A$:
+\begin{equation*}
+L^{\text{bucket}} \;\le\; X^\top \mathbf{1}_A \;\le\; U^{\text{bucket}}.
+\end{equation*}
+
+\item \textbf{online floors (no decreases).} With $L$ the batch row totals,
+\begin{equation*}
+X\,\mathbf{1}_C \;\ge\; L.
+\end{equation*}
+
+\item \textbf{ZIP lock (online, inadmissible $a$).} With $e_a$ the $a$-th basis vector,
+\begin{equation*}
+e_a^\top X\,\mathbf{1}_C \;=\; L_a.
+\end{equation*}
+
+\item \textbf{Online headroom (feasibility only).} Optionally allow one extra slot
+per agency that still had capacity:
+\begin{equation*}
+X\,\mathbf{1}_C \;\le\; U + h,
+\qquad
+h_a=\begin{cases}
+1, & U_a>0 \ \text{and online},\\
+0, & \text{otherwise}.
+\end{cases}
+\end{equation*}
+
+\item \textbf{Integrality \& nonnegativity.}
+\begin{equation*}
+X \in \mathbb{Z}_{\ge 0}^{\,|\A|\times |\C|}.
+\end{equation*}
+
+\end{itemize}
+
+\section{Compact vectorized (Kronecker) form (optional)}
+
+Vectorize column-wise: $x=\vecop(X)\in\Z_{\ge 0}^{|\A||\C|}$, $w=\vecop(W)$.
+Define the summation operators
+\[
+R=(\onesC^\top\!\otimes I_{|\A|})\in \R^{|\A|\times |\A||\C|}\quad\text{(row sums)},\qquad
+C=(I_{|\C|}\!\otimes \onesA^\top)\in \R^{|\C|\times |\A||\C|}\quad\text{(col sums)},
+\]
+\[
+G=(\onesC^\top\!\otimes \onesA^\top)\in \R^{1\times |\A||\C|}\quad\text{(global sum)}.
+\]
+Then the MILP is
+\begin{equation*}
+\begin{aligned}
+\max\ & w^\top x \\
+\text{s.t. }\
+& R x \le U,\\
+& C x \in \big[L^{\text{bucket}},\, U^{\text{bucket}}\big],\\
+& G x = U_{\mathrm{tot}} \ \ (\text{or }U_{\mathrm{tot}}+1\ \text{online}),\\
+& -R x \le -L^{\text{(batch)}}\ \ (\text{online}),\\
+& (R_{a,\cdot})x=L^{\text{(batch)}}_a\ \ \text{for inadmissible }a\ \ (\text{online}),\\
+& x\in \Z_{\ge 0}^{|\A||\C|}.
+\end{aligned}
+\end{equation*}
+
+%----------------------------------------------------------------------------
+
+\section*{Data (2 agencies $\times$ 3 buckets)}
+Agencies $A=\{\mathrm{A1},\mathrm{A2}\}$, buckets $C=\{\mathrm{good},\mathrm{fair},\mathrm{bad}\}$.
+Decision matrix $X\in\mathbb{Z}_{\ge 0}^{2\times 3}$; objective is $\max\langle W,X\rangle$.
+
+\[
+W=
+\begin{array}{c|ccc}
+ & \text{good} & \text{fair} & \text{bad} \\\hline
+\text{A1} & 12   & 10 & 7 \\
+\text{A2} & 7.2  & 6  & 4.2
+\end{array}
+\qquad
+U=
+\begin{bmatrix}
+2\\[2pt]1
+\end{bmatrix}
+\qquad
+L^{\text{bucket}}=\begin{bmatrix}1\\[2pt]1\\[2pt]0\end{bmatrix},\quad
+U^{\text{bucket}}=\begin{bmatrix}3\\[2pt]3\\[2pt]3\end{bmatrix}.
+\]
+
+Ones vectors: $\mathbf{1}_A=[1\;\;1]^\top$, $\mathbf{1}_C=[1\;\;1\;\;1]^\top$.  
+Row sums $=X\mathbf{1}_C$, column sums $=X^\top\mathbf{1}_A$, global total $=\mathbf{1}_A^\top X \mathbf{1}_C$.
+
+\section*{Batch optimization (no new policy)}
+\[
+\begin{aligned}
+\text{maximize}\quad & \langle W,X\rangle \\[2pt]
+\text{subject to}\quad
+& X\,\mathbf{1}_C \le U, \\[2pt]
+& \mathbf{1}_A^\top X\,\mathbf{1}_C = U_{\text{tot}}=3, \\[2pt]
+& L^{\text{bucket}} \le X^\top \mathbf{1}_A \le U^{\text{bucket}}, \\[2pt]
+& X \in \mathbb{Z}_{\ge 0}^{2\times 3}.
+\end{aligned}
+\]
+
+A feasible and \emph{optimal} batch is
+\[
+X^{(0)}=
+\begin{array}{c|ccc}
+ & \text{good} & \text{fair} & \text{bad} \\\hline
+\text{A1} & 2 & 0 & 0 \\
+\text{A2} & 0 & 1 & 0
+\end{array}
+\]
+Checks:
+\[
+X^{(0)}\mathbf{1}_C=\begin{bmatrix}2\\[2pt]1\end{bmatrix}\le
+\begin{bmatrix}2\\[2pt]1\end{bmatrix},
+\qquad
+\big(X^{(0)}\big)^\top\mathbf{1}_A=\begin{bmatrix}2\\[2pt]1\\[2pt]0\end{bmatrix}
+\text{ (meets bucket mins)},
+\qquad
+\mathbf{1}_A^\top X^{(0)}\mathbf{1}_C=3.
+\]
+Objective:
+\[
+\langle W,X^{(0)}\rangle = 12\cdot 2 + 6\cdot 1 = 30.0.
+\]
+
+\section*{Online optimization (+1 policy) with ZIP lock}
+A new policy arrives. Online rules:
+\begin{itemize}[leftmargin=*]
+\item \textbf{Global:} $\mathbf{1}_A^\top X\mathbf{1}_C=4$ (exactly one more).
+\item \textbf{Floors (no decreases):} $X\mathbf{1}_C \ge L$, where $L:=X^{(0)}\mathbf{1}_C=\begin{bmatrix}2\\[2pt]1\end{bmatrix}$.
+\item \textbf{Headroom (feasibility only):} allow one extra slot per agency that had capacity: $X\mathbf{1}_C \le U+h$, with $h=\begin{bmatrix}1\\[2pt]1\end{bmatrix}$, so online row caps are $\begin{bmatrix}3\\[2pt]2\end{bmatrix}$.
+\item \textbf{ZIP lock:} suppose the incoming policy’s postal code is \emph{inadmissible} for A1. Then A1’s row total is fixed at its floor:
+\[
+e_1^\top X \mathbf{1}_C = L_1 = 2,
+\quad \text{where } e_1=[1\;0]^\top.
+\]
+\item \textbf{Bucket bounds:} keep $L^{\text{bucket}}\le X^\top \mathbf{1}_A \le U^{\text{bucket}}$.
+\end{itemize}
+
+Online problem:
+\[
+\begin{aligned}
+\text{maximize}\quad & \langle W,X\rangle \\[2pt]
+\text{subject to}\quad
+& X\,\mathbf{1}_C \le \begin{bmatrix}3\\[2pt]2\end{bmatrix}, \qquad
+X\,\mathbf{1}_C \ge \begin{bmatrix}2\\[2pt]1\end{bmatrix}, \\[4pt]
+& \mathbf{1}_A^\top X\,\mathbf{1}_C = 4, \\[4pt]
+& L^{\text{bucket}} \le X^\top \mathbf{1}_A \le U^{\text{bucket}}, \\[4pt]
+& e_1^\top X \mathbf{1}_C = 2 \quad (\text{ZIP lock on A1}), \\[4pt]
+& X \in \mathbb{Z}_{\ge 0}^{2\times 3}.
+\end{aligned}
+\]
+
+Because A1 is locked at 2, the extra unit must go to A2 (A2 may rise from 1 to at most 2).  
+The best bucket for A2 is \emph{good} (weight $7.2$), and all bucket bounds remain satisfied.
+
+A feasible and optimal online solution is
+\[
+X^{(1)}=
+\begin{array}{c|ccc}
+ & \text{good} & \text{fair} & \text{bad} \\\hline
+\text{A1} & 2 & 0 & 0 \\
+\text{A2} & 1 & 1 & 0
+\end{array}
+\]
+Checks:
+\[
+X^{(1)}\mathbf{1}_C=\begin{bmatrix}2\\[2pt]2\end{bmatrix},
+\quad
+\begin{bmatrix}2\\[2pt]2\end{bmatrix}\in
+\left[\begin{bmatrix}2\\[2pt]1\end{bmatrix},\begin{bmatrix}3\\[2pt]2\end{bmatrix}\right],
+\quad
+\mathbf{1}_A^\top X^{(1)}\mathbf{1}_C=4,
+\]
+\[
+\big(X^{(1)}\big)^\top\mathbf{1}_A=\begin{bmatrix}3\\[2pt]1\\[2pt]0\end{bmatrix}
+\in
+\left[\begin{bmatrix}1\\[2pt]1\\[2pt]0\end{bmatrix},\begin{bmatrix}3\\[2pt]3\\[2pt]3\end{bmatrix}\right],
+\qquad
+e_1^\top X^{(1)}\mathbf{1}_C=2.
+\]
+Objective:
+\[
+\langle W,X^{(1)}\rangle
+= 12\cdot 2 + 7.2\cdot 1 + 6\cdot 1
+= 37.2,
+\quad
+\Delta \text{ (online $-$ batch)} = 7.2.
+\]
+
+\paragraph*{If the policy were ZIP-admissible at A1} (no lock), the best place for the extra unit would be A1--good (weight $12$):
+\[
+X^{(1)}_{\text{(all admissible)}}=
+\begin{array}{c|ccc}
+ & \text{good} & \text{fair} & \text{bad} \\\hline
+\text{A1} & 3 & 0 & 0 \\
+\text{A2} & 0 & 1 & 0
+\end{array}
+\qquad
+\langle W,X^{(1)}_{\text{(all admissible)}}\rangle = 42.0.
+\]
+
+\end{document}
+
+
