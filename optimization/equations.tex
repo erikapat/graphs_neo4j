@@ -59,6 +59,7 @@ X_{a,c}\in \Z_{\ge 0}\ \ \text{(policies assigned to broker $a$ in bucket $c$)}.
 \]
 
 \paragraph{Objective (maximize total productivity).}
+\noindent We use the Frobenius inner product $\langle W,X\rangle := \sum_{a\in\A}\sum_{c\in\C} W_{a,c}\,X_{a,c}$.
 \begin{equation*}
 \max\ \ \langle W,X\rangle
 \;=\;
@@ -66,6 +67,27 @@ X_{a,c}\in \Z_{\ge 0}\ \ \text{(policies assigned to broker $a$ in bucket $c$)}.
 \end{equation*}
 
 \paragraph{Constraints.}
+\paragraph{Constraints in words (logical vs. business).}
+\paragraph{Logical constraints.}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Integrality \& nonnegativity:} policies are whole and nonnegative,
+$X_{a,c}\in\Z_{\ge 0}$.
+\item \textbf{Global conservation:} total assigned equals total inventory,
+$\mathbf{1}_A^\top X\,\mathbf{1}_C=U_{\mathrm{tot}}$ (or $U_{\mathrm{tot}}+1$ online).
+\end{enumerate}
+
+\paragraph{Business constraints.}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Per-agency capacity:} no agency exceeds its capacity,
+$X\,\mathbf{1}_C \le U$.
+\item \textbf{Previous-assignment floor (online):} do not drop an agency below its
+batch total, $X\,\mathbf{1}_C \ge L$.
+\item \textbf{ZIP admissibility (online):} if a ZIP is inadmissible for agency $a$,
+lock its row total, $e_a^\top X\,\mathbf{1}_C=L_a$.
+\item \textbf{Bucket mix:} keep each bucket total within bounds,
+$L^{\text{bucket}} \le X^\top \mathbf{1}_A \le U^{\text{bucket}}$.
+\end{enumerate}
+
 \begin{align*}
 \text{Per-broker capacity:}\quad
 & \sum_{c\in\C} X_{a,c} \;\le\; U_a,
@@ -171,6 +193,31 @@ Then the MILP is
 \end{equation*}
 
 %----------------------------------------------------------------------------
+
+\section{Alternative objective: maximum entropy (optional)}
+If you want a neutral allocation (spread policies as evenly as possible) rather than
+maximizing productivity, you can replace the objective with a maximum-entropy criterion.
+Let $x_{a,c}\ge 0$ be \emph{continuous} (relaxing integrality). The entropy objective is
+\[
+\max\ \ -\sum_{a\in\A}\sum_{c\in\C} x_{a,c}\log x_{a,c}
+\quad\text{(equivalently, maximize } \sum_{a,c}\mathrm{entr}(x_{a,c})\text{)}.
+\]
+Subject to the same linear constraints (capacity, conservation, bucket mix, online floors,
+ZIP lock), this yields the most ``uniform'' feasible assignment. Because the entropy
+objective is nonlinear, this is a convex program (not an ILP); you can solve it with
+convex solvers or approximate it via piecewise-linear constraints if you need integrality.
+
+\section{Hybrid objective: productivity + entropy (optional)}
+When you trust historical weights but want neutrality where information is weak, add
+an entropy regularizer:
+\[
+\max\ \ \sum_{a\in\A}\sum_{c\in\C} W_{a,c}x_{a,c}\;+\;\lambda\sum_{a\in\A}\sum_{c\in\C}\mathrm{entr}(x_{a,c}),
+\qquad \lambda>0.
+\]
+This keeps the productivity objective dominant while encouraging a smoother spread
+of assignments when the weights are similar or uncertain. As with pure entropy,
+this is a convex (continuous) problem; for integrality you can use a piecewise-linear
+approximation or solve the continuous relaxation and then round/repair.
 
 \section*{Data (2 agencies $\times$ 3 buckets)}
 Agencies $A=\{\mathrm{A1},\mathrm{A2}\}$, buckets $C=\{\mathrm{good},\mathrm{fair},\mathrm{bad}\}$.
@@ -310,5 +357,3 @@ X^{(1)}_{\text{(all admissible)}}=
 \]
 
 \end{document}
-
-

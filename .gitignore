@@ -61,6 +61,11 @@ ray_results/
 figs/
 !figs/.gitkeep
 
+# ---------------- LaTeX / PDFs ----------------
+*.aux
+*.out
+*.pdf
+
 # ---------------- IDE / OS ----------------
 # VS Code
 .vscode/

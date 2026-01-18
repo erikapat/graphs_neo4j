@@ -1,11 +1,13 @@
-python3.11 -m venv .venv_opt
-source .venv_opt/bin/activate
+uv venv --python 3.10
+source .venv/bin/activate
 
 
 # 2) Install with the SAME interpreter
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+uv pip install -r requirements.txt
 
-#eliminate
-#rm -rf .venv_graphs
+# 3) Run
+python optimization_v2.py
 
+# If you need a clean rebuild
+# deactivate
+# rm -rf .venv
