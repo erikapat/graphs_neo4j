@@ -83,8 +83,9 @@ X_{a,c}\in \Z_{\ge 0}\ \ \text{(policies assigned to broker $a$ in bucket $c$)}.
 & \sum_{c\in\C} X_{a,c} \ \ge\ L^{\text{(batch)}}_a,
 & \forall a\in\A
 \\[4pt]
-\text{ZIP lock (online, if inadmissible):}\quad
-& \sum_{c\in\C} X_{a,c} \;=\; L^{\text{(Batch)}}_a,
+\text{ZIP lock (inadmissible):}\quad
+& \sum_{c\in\C} X_{a,c} \;=\; 0\ \ (\text{batch}),\quad
+\sum_{c\in\C} X_{a,c} \;=\; L^{\text{(batch)}}_a\ \ (\text{online}),
 & \forall a\in\A\ \text{inadmissible.}
 \end{align*}
 
@@ -98,11 +99,13 @@ Let $\mathbf{1}_A\in\R^{|\A|}$ and $\mathbf{1}_C\in\R^{|\C|}$ be all-ones vector
 \begin{equation*}
 X\,\mathbf{1}_C \;\le\; U.
 \end{equation*}
+where $U = [U_a]$ is the vector of per-agency capacities.
 
 \item \textbf{Global conservation.} 
 
 Total assigned equals inventory 
-$U_{\mathrm{tot}}=\mathbf{1}_A^\top U$ (batch) or $U_{\mathrm{tot}}+1$ (online):
+$U_{\mathrm{tot}}=\mathbf{1}_A^\top U$ (batch) or $U_{\mathrm{tot}}+1$ (online).
+In the toy example, $U_{\mathrm{tot}}=4+3+1+2=10$:
 \begin{equation*}
 \mathbf{1}_A^\top X\,\mathbf{1}_C \;=\; U_{\mathrm{tot}}
 \quad\text{(batch)}
@@ -116,15 +119,18 @@ $L^{\text{bucket}},\,U^{\text{bucket}} \in \mathbb{R}^{|\C|}$ and column sums $X
 \begin{equation*}
 L^{\text{bucket}} \;\le\; X^\top \mathbf{1}_A \;\le\; U^{\text{bucket}}.
 \end{equation*}
+Equivalently, for each bucket $c \in \C$,
+$L^{\text{bucket}}_c \le \sum_{a\in\A} X_{a,c} \le U^{\text{bucket}}_c$.
 
 \item \textbf{online floors (no decreases).} With $L$ the batch row totals,
 \begin{equation*}
 X\,\mathbf{1}_C \;\ge\; L.
 \end{equation*}
 
-\item \textbf{ZIP lock (online, inadmissible $a$).} With $e_a$ the $a$-th basis vector,
+\item \textbf{ZIP admissibility (inadmissible $a$).} With $e_a$ the $a$-th basis vector,
 \begin{equation*}
-e_a^\top X\,\mathbf{1}_C \;=\; L_a.
+e_a^\top X\,\mathbf{1}_C \;=\; 0 \quad (\text{batch}),\qquad
+e_a^\top X\,\mathbf{1}_C \;=\; L_a \quad (\text{online}).
 \end{equation*}
 
 \item \textbf{Online headroom (feasibility only).} Optionally allow one extra slot
@@ -133,9 +139,10 @@ per agency that still had capacity:
 X\,\mathbf{1}_C \;\le\; U + h,
 \qquad
 h_a=\begin{cases}
-1, & U_a>0 \ \text{and online},\\
-0, & \text{otherwise}.
+H, & U_a>0 \ \text{and online},\\
+0, & \text{otherwise},
 \end{cases}
+\qquad H=\text{per-agency online headroom}.
 \end{equation*}
 
 \item \textbf{Integrality \& nonnegativity.}
@@ -165,12 +172,25 @@ Then the MILP is
 & C x \in \big[L^{\text{bucket}},\, U^{\text{bucket}}\big],\\
 & G x = U_{\mathrm{tot}} \ \ (\text{or }U_{\mathrm{tot}}+1\ \text{online}),\\
 & -R x \le -L^{\text{(batch)}}\ \ (\text{online}),\\
+& (R_{a,\cdot})x=0\ \ \text{for inadmissible }a\ \ (\text{batch}),\\
 & (R_{a,\cdot})x=L^{\text{(batch)}}_a\ \ \text{for inadmissible }a\ \ (\text{online}),\\
 & x\in \Z_{\ge 0}^{|\A||\C|}.
 \end{aligned}
 \end{equation*}
 
 %----------------------------------------------------------------------------
+
+\section*{Batch vs. online (conceptual)}
+\textbf{Batch mode} solves a full assignment from a fixed inventory. The total assigned
+must equal the batch inventory $U_{\mathrm{tot}}$, and there are no floor constraints.
+This produces a baseline allocation $X^{(0)}$.
+
+\textbf{Online mode} re-optimizes when a new policy arrives. The inventory increases to
+$U_{\mathrm{tot}}+1$, and row totals are not allowed to decrease (floors equal the
+previous batch totals). ZIP admissibility still applies; if the incoming policy is
+inadmissible for an agency, that agency's row total is locked at its floor. This
+incremental process repeats until the monthly target is reached, subject to feasibility
+(e.g., headroom and capacity limits).
 
 \section*{Data (2 agencies $\times$ 3 buckets)}
 Agencies $A=\{\mathrm{A1},\mathrm{A2}\}$, buckets $C=\{\mathrm{good},\mathrm{fair},\mathrm{bad}\}$.
@@ -310,5 +330,3 @@ X^{(1)}_{\text{(all admissible)}}=
 \]
 
 \end{document}
-
-
