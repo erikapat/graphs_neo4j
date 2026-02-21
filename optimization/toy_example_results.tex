@@ -1,0 +1,146 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{array}
+\usepackage{amsmath}
+
+\title{Toy Example Results (Batch vs. Online)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Baseline vs. Online Assignments}
+
+\noindent
+In Table 1 we see a simple iteration: batch mode first computes a baseline monthly plan
+that allocates the initial inventory. Online mode then simulates incoming policies one
+at a time with a target of $U_{\text{month}}=5$ online arrivals (total monthly inventory
+$U_{\text{tot}}+U_{\text{month}}$); each arrival triggers a re-optimization
+that preserves existing allocations and assigns only the incremental policy to an eligible
+agency (e.g., respecting ZIP admissibility). In this table, the new policy is a high-value
+(Gold) policy and its ZIP is admissible for A1, so the increment goes to A1. If the ZIP were
+inadmissible for A1, the policy would be routed to the best admissible agency instead. This
+process repeats until the monthly total is filled. The inventory size is $U_{\text{tot}}=10$ in batch, 11 after the first arrival
+($X^{(1)}$), and 12 after the second arrival ($X^{(2)}$).
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l|rrr|r}
+\hline
+Batch $X^{(0)}$ & Gold & Silver & Bronze & Row total \\
+\hline
+A1 & 4 & 0 & 0 & 4 \\
+A2 & 0 & 2 & 1 & 3 \\
+A3 & 0 & 0 & 1 & 1 \\
+A4 & 1 & 1 & 0 & 2 \\
+\hline
+Bucket total & 5 & 3 & 2 & 10 \\
+\hline
+\end{tabular}
+\hspace{1cm}
+\begin{tabular}{l|rrr|r}
+\hline
+Online $X^{(1)}$ & Gold & Silver & Bronze & Row total \\
+\hline
+A1 & 5 & 0 & 0 & 5 \\
+A2 & 0 & 2 & 1 & 3 \\
+A3 & 0 & 0 & 1 & 1 \\
+A4 & 1 & 1 & 0 & 2 \\
+\hline
+Bucket total & 6 & 3 & 2 & 11 \\
+\hline
+\end{tabular}
+\hspace{1cm}
+\begin{tabular}{l|rrr|r}
+\hline
+Online $X^{(2)}$ & Gold & Silver & Bronze & Row total \\
+\hline
+A1 & 6 & 0 & 0 & 6 \\
+A2 & 0 & 2 & 1 & 3 \\
+A3 & 0 & 0 & 1 & 1 \\
+A4 & 1 & 1 & 0 & 2 \\
+\hline
+Bucket total & 7 & 3 & 2 & 12 \\
+\hline
+\end{tabular}
+\hspace{1cm}
+\begin{tabular}{l|rrr|r}
+\hline
+Online $X^{(3)}$ & Gold & Silver & Bronze & Row total \\
+\hline
+A1 & 7 & 0 & 0 & 7 \\
+A2 & 0 & 2 & 1 & 3 \\
+A3 & 0 & 0 & 1 & 1 \\
+A4 & 0 & 2 & 0 & 2 \\
+\hline
+Bucket total & 7 & 4 & 2 & 13 \\
+\hline
+\end{tabular}
+\hspace{1cm}
+\begin{tabular}{l|rrr|r}
+\hline
+Online $X^{(4)}$ & Gold & Silver & Bronze & Row total \\
+\hline
+A1 & 7 & 1 & 0 & 8 \\
+A2 & 0 & 2 & 1 & 3 \\
+A3 & 0 & 0 & 1 & 1 \\
+A4 & 0 & 2 & 0 & 2 \\
+\hline
+Bucket total & 7 & 5 & 2 & 14 \\
+\hline
+\end{tabular}
+\hspace{1cm}
+\begin{tabular}{l|rrr|r}
+\hline
+Online $X^{(5)}$ & Gold & Silver & Bronze & Row total \\
+\hline
+A1 & 7 & 2 & 0 & 9 \\
+A2 & 0 & 2 & 1 & 3 \\
+A3 & 0 & 0 & 1 & 1 \\
+A4 & 0 & 2 & 0 & 2 \\
+\hline
+Bucket total & 7 & 6 & 2 & 15 \\
+\hline
+\end{tabular}
+\caption{Baseline assignment (batch) and online assignments after each arrival.}
+\end{table}
+
+\section*{Delta (Online $-$ Batch)}
+
+\noindent
+From batch to $X^{(1)}$, A1 receives one additional Gold policy.
+Row-total delta: $\Delta = [1, 0, 0, 0]^\top$.
+As arrivals continue, each step adds one policy overall while row totals never
+decrease; the bucket mix can adjust to stay within bounds.
+
+\section*{What's Not in the Batch (and why)}
+
+\noindent
+Batch mode optimizes a fixed monthly inventory $U_{\text{tot}}$. Online mode then simulates
+arrivals one at a time until that monthly total is reached; each arrival triggers a
+re-optimization that preserves existing allocations. The following rules only matter
+when adding a single new policy:
+
+\begin{itemize}
+\item \textbf{Per-agency floors:} protect existing allocations; no agency can drop below
+its previous total.
+\item \textbf{ZIP lock (for the incoming policy):} if the new policy's ZIP is inadmissible
+for agency $a$, that agency's total is frozen at its current count.
+\item \textbf{Headroom (per-agency buffer):} allows extra slots when adding one policy at a
+time to keep feasibility.
+\item \textbf{Bucket bounds still apply online:} each new policy must keep Gold/Silver/Bronze
+totals within their min/max limits.
+\end{itemize}
+
+\section*{Constraint Audit (Summary)}
+
+\begin{itemize}
+\item Capacity: all agencies are at capacity in batch; in online, A1 binds, others have slack.
+\item Global conservation: totals are 10 (batch) and 11 (online).
+\item Bucket bounds: Silver and Bronze meet their minimums; all buckets stay within bounds.
+\item ZIP admissibility (online): A3 and A4 are locked at their floors.
+\end{itemize}
+
+\end{document}

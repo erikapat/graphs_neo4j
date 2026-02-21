@@ -33,7 +33,7 @@
 \paragraph{Sets and data.}
 \[
 \A=\{\text{brokers/agencies}\},\qquad
-\C=\{\text{good},\,\text{fair},\,\text{bad}\}.
+\C=\{\text{Gold},\,\text{Silver},\,\text{Bronze}\}.
 \]
 \[
 W=\big[W_{a,c}\big]_{a\in\A,\;c\in\C}\ \text{(productivity weights)},\qquad
@@ -41,12 +41,6 @@ U=\big[U_a\big]_{a\in\A}\ \text{(per-agency capacity)}.
 \]
 
 \[
-x_{a,c} \in \mathbb{Z}_{\ge 0} \qquad \forall a \in A,\, \forall c \in C
-\]
-
-
-\[
-x_{a,c} \in \mathbb{Z}_{\ge 0},\quad a\in A,\ c\in C := \{\text{Gold},\ \text{Silver},\ \text{Bronze}\};\qquad
 X \in \mathbb{Z}_{\ge 0}^{m\times p};\qquad
 W \in \mathbb{R}_{\ge 0}^{m\times p}.
 \]
@@ -72,7 +66,8 @@ X_{a,c}\in \Z_{\ge 0}\ \ \text{(policies assigned to broker $a$ in bucket $c$)}.
 \begin{enumerate}[leftmargin=*]
 \item \textbf{Integrality \& nonnegativity:} policies are whole and nonnegative,
 $X_{a,c}\in\Z_{\ge 0}$.
-\item \textbf{Global conservation:} total assigned equals total inventory,
+\item \textbf{Global conservation:} total assigned equals the total number of policies
+available to assign in that run (the sum of per-agency capacities),
 $\mathbf{1}_A^\top X\,\mathbf{1}_C=U_{\mathrm{tot}}$ (or $U_{\mathrm{tot}}+1$ online).
 \end{enumerate}
 
@@ -219,29 +214,38 @@ of assignments when the weights are similar or uncertain. As with pure entropy,
 this is a convex (continuous) problem; for integrality you can use a piecewise-linear
 approximation or solve the continuous relaxation and then round/repair.
 
-\section*{Data (2 agencies $\times$ 3 buckets)}
-Agencies $A=\{\mathrm{A1},\mathrm{A2}\}$, buckets $C=\{\mathrm{good},\mathrm{fair},\mathrm{bad}\}$.
-Decision matrix $X\in\mathbb{Z}_{\ge 0}^{2\times 3}$; objective is $\max\langle W,X\rangle$.
+\section*{Toy data (4 agencies $\times$ 3 buckets)}
+Agencies $\A=\{\mathrm{A1},\mathrm{A2},\mathrm{A3},\mathrm{A4}\}$ and buckets
+$\C=\{\mathrm{Gold},\mathrm{Silver},\mathrm{Bronze}\}$. Decision matrix
+$X\in\mathbb{Z}_{\ge 0}^{4\times 3}$; objective is $\max\langle W,X\rangle$.
 
+Per-agency capacities and totals:
+\[
+U=\begin{bmatrix}4\\[2pt]3\\[2pt]1\\[2pt]2\end{bmatrix},
+\quad
+U_{\mathrm{tot}}=10.
+\]
+
+Bucket bounds:
+\[
+L^{\text{bucket}}=\begin{bmatrix}2\\[2pt]3\\[2pt]2\end{bmatrix},\quad
+U^{\text{bucket}}=\begin{bmatrix}7\\[2pt]7\\[2pt]6\end{bmatrix}.
+\]
+
+Productivity weights (bucket-adjusted):
 \[
 W=
 \begin{array}{c|ccc}
- & \text{good} & \text{fair} & \text{bad} \\\hline
-\text{A1} & 12   & 10 & 7 \\
-\text{A2} & 7.2  & 6  & 4.2
+ & \text{Gold} & \text{Silver} & \text{Bronze} \\\hline
+\text{A1} & 12.03 & 10.00 & 8.51 \\
+\text{A2} & 8.41 & 7.04 & 5.98 \\
+\text{A3} & 6.04 & 5.00 & 4.27 \\
+\text{A4} & 9.60 & 8.01 & 6.83
 \end{array}
-\qquad
-U=
-\begin{bmatrix}
-2\\[2pt]1
-\end{bmatrix}
-\qquad
-L^{\text{bucket}}=\begin{bmatrix}1\\[2pt]1\\[2pt]0\end{bmatrix},\quad
-U^{\text{bucket}}=\begin{bmatrix}3\\[2pt]3\\[2pt]3\end{bmatrix}.
 \]
 
-Ones vectors: $\mathbf{1}_A=[1\;\;1]^\top$, $\mathbf{1}_C=[1\;\;1\;\;1]^\top$.  
-Row sums $=X\mathbf{1}_C$, column sums $=X^\top\mathbf{1}_A$, global total $=\mathbf{1}_A^\top X \mathbf{1}_C$.
+Online ZIP admissibility (example): incoming ZIP is admissible for A1 and A2, but
+inadmissible for A3 and A4, so their row totals are locked at the online floor.
 
 \section*{Batch optimization (no new policy)}
 \[
@@ -249,111 +253,50 @@ Row sums $=X\mathbf{1}_C$, column sums $=X^\top\mathbf{1}_A$, global total $=\ma
 \text{maximize}\quad & \langle W,X\rangle \\[2pt]
 \text{subject to}\quad
 & X\,\mathbf{1}_C \le U, \\[2pt]
-& \mathbf{1}_A^\top X\,\mathbf{1}_C = U_{\text{tot}}=3, \\[2pt]
+& \mathbf{1}_A^\top X\,\mathbf{1}_C = U_{\text{tot}}=10, \\[2pt]
 & L^{\text{bucket}} \le X^\top \mathbf{1}_A \le U^{\text{bucket}}, \\[2pt]
-& X \in \mathbb{Z}_{\ge 0}^{2\times 3}.
+& X \in \mathbb{Z}_{\ge 0}^{4\times 3}.
 \end{aligned}
 \]
 
-A feasible and \emph{optimal} batch is
+An optimal batch solution is
 \[
 X^{(0)}=
 \begin{array}{c|ccc}
- & \text{good} & \text{fair} & \text{bad} \\\hline
-\text{A1} & 2 & 0 & 0 \\
-\text{A2} & 0 & 1 & 0
+ & \text{Gold} & \text{Silver} & \text{Bronze} \\\hline
+\text{A1} & 4 & 0 & 0 \\
+\text{A2} & 0 & 2 & 1 \\
+\text{A3} & 0 & 0 & 1 \\
+\text{A4} & 1 & 1 & 0
 \end{array}
 \]
-Checks:
-\[
-X^{(0)}\mathbf{1}_C=\begin{bmatrix}2\\[2pt]1\end{bmatrix}\le
-\begin{bmatrix}2\\[2pt]1\end{bmatrix},
-\qquad
-\big(X^{(0)}\big)^\top\mathbf{1}_A=\begin{bmatrix}2\\[2pt]1\\[2pt]0\end{bmatrix}
-\text{ (meets bucket mins)},
-\qquad
-\mathbf{1}_A^\top X^{(0)}\mathbf{1}_C=3.
-\]
-Objective:
-\[
-\langle W,X^{(0)}\rangle = 12\cdot 2 + 6\cdot 1 = 30.0.
-\]
+with row totals $\begin{bmatrix}4\\[2pt]3\\[2pt]1\\[2pt]2\end{bmatrix}$ and
+objective $\langle W,X^{(0)}\rangle=90.069$.
 
-\section*{Online optimization (+1 policy) with ZIP lock}
-A new policy arrives. Online rules:
+\section*{Online optimization (+1 policy) with ZIP locks}
+Online rules:
 \begin{itemize}[leftmargin=*]
-\item \textbf{Global:} $\mathbf{1}_A^\top X\mathbf{1}_C=4$ (exactly one more).
-\item \textbf{Floors (no decreases):} $X\mathbf{1}_C \ge L$, where $L:=X^{(0)}\mathbf{1}_C=\begin{bmatrix}2\\[2pt]1\end{bmatrix}$.
-\item \textbf{Headroom (feasibility only):} allow one extra slot per agency that had capacity: $X\mathbf{1}_C \le U+h$, with $h=\begin{bmatrix}1\\[2pt]1\end{bmatrix}$, so online row caps are $\begin{bmatrix}3\\[2pt]2\end{bmatrix}$.
-\item \textbf{ZIP lock:} suppose the incoming policy’s postal code is \emph{inadmissible} for A1. Then A1’s row total is fixed at its floor:
-\[
-e_1^\top X \mathbf{1}_C = L_1 = 2,
-\quad \text{where } e_1=[1\;0]^\top.
-\]
+\item \textbf{Global:} $\mathbf{1}_A^\top X\mathbf{1}_C=11$ (exactly one more).
+\item \textbf{Floors (no decreases):} $X\mathbf{1}_C \ge L$, where $L:=X^{(0)}\mathbf{1}_C$.
+\item \textbf{Headroom (feasibility only):} allow one extra slot per agency that had capacity:
+$X\mathbf{1}_C \le U+h$, with $h_a=1$ if $U_a>0$ and online, else $0$.
+\item \textbf{ZIP locks:} incoming ZIP is inadmissible for A3 and A4, so
+$e_3^\top X\mathbf{1}_C=L_3$ and $e_4^\top X\mathbf{1}_C=L_4$.
 \item \textbf{Bucket bounds:} keep $L^{\text{bucket}}\le X^\top \mathbf{1}_A \le U^{\text{bucket}}$.
 \end{itemize}
 
-Online problem:
-\[
-\begin{aligned}
-\text{maximize}\quad & \langle W,X\rangle \\[2pt]
-\text{subject to}\quad
-& X\,\mathbf{1}_C \le \begin{bmatrix}3\\[2pt]2\end{bmatrix}, \qquad
-X\,\mathbf{1}_C \ge \begin{bmatrix}2\\[2pt]1\end{bmatrix}, \\[4pt]
-& \mathbf{1}_A^\top X\,\mathbf{1}_C = 4, \\[4pt]
-& L^{\text{bucket}} \le X^\top \mathbf{1}_A \le U^{\text{bucket}}, \\[4pt]
-& e_1^\top X \mathbf{1}_C = 2 \quad (\text{ZIP lock on A1}), \\[4pt]
-& X \in \mathbb{Z}_{\ge 0}^{2\times 3}.
-\end{aligned}
-\]
-
-Because A1 is locked at 2, the extra unit must go to A2 (A2 may rise from 1 to at most 2).  
-The best bucket for A2 is \emph{good} (weight $7.2$), and all bucket bounds remain satisfied.
-
-A feasible and optimal online solution is
+An optimal online solution is
 \[
 X^{(1)}=
 \begin{array}{c|ccc}
- & \text{good} & \text{fair} & \text{bad} \\\hline
-\text{A1} & 2 & 0 & 0 \\
-\text{A2} & 1 & 1 & 0
+ & \text{Gold} & \text{Silver} & \text{Bronze} \\\hline
+\text{A1} & 5 & 0 & 0 \\
+\text{A2} & 0 & 2 & 1 \\
+\text{A3} & 0 & 0 & 1 \\
+\text{A4} & 1 & 1 & 0
 \end{array}
 \]
-Checks:
-\[
-X^{(1)}\mathbf{1}_C=\begin{bmatrix}2\\[2pt]2\end{bmatrix},
-\quad
-\begin{bmatrix}2\\[2pt]2\end{bmatrix}\in
-\left[\begin{bmatrix}2\\[2pt]1\end{bmatrix},\begin{bmatrix}3\\[2pt]2\end{bmatrix}\right],
-\quad
-\mathbf{1}_A^\top X^{(1)}\mathbf{1}_C=4,
-\]
-\[
-\big(X^{(1)}\big)^\top\mathbf{1}_A=\begin{bmatrix}3\\[2pt]1\\[2pt]0\end{bmatrix}
-\in
-\left[\begin{bmatrix}1\\[2pt]1\\[2pt]0\end{bmatrix},\begin{bmatrix}3\\[2pt]3\\[2pt]3\end{bmatrix}\right],
-\qquad
-e_1^\top X^{(1)}\mathbf{1}_C=2.
-\]
-Objective:
-\[
-\langle W,X^{(1)}\rangle
-= 12\cdot 2 + 7.2\cdot 1 + 6\cdot 1
-= 37.2,
-\quad
-\Delta \text{ (online $-$ batch)} = 7.2.
-\]
-
-\paragraph*{If the policy were ZIP-admissible at A1} (no lock), the best place for the extra unit would be A1--good (weight $12$):
-\[
-X^{(1)}_{\text{(all admissible)}}=
-\begin{array}{c|ccc}
- & \text{good} & \text{fair} & \text{bad} \\\hline
-\text{A1} & 3 & 0 & 0 \\
-\text{A2} & 0 & 1 & 0
-\end{array}
-\qquad
-\langle W,X^{(1)}_{\text{(all admissible)}}\rangle = 42.0.
-\]
+with objective $\langle W,X^{(1)}\rangle=102.101$ and delta
+$X^{(1)}\mathbf{1}_C-X^{(0)}\mathbf{1}_C=[1,0,0,0]^\top$.
 
 \end{document}
