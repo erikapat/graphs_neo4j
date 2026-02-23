@@ -16,14 +16,17 @@
 \noindent
 In Table 1 we see a simple iteration: batch mode first computes a baseline monthly plan
 that allocates the initial inventory. Online mode then simulates incoming policies one
-at a time with a target of $U_{\text{month}}=5$ online arrivals (total monthly inventory
+at a time with a target of $U_{\text{month}}=2$ online arrivals (total monthly inventory
 $U_{\text{tot}}+U_{\text{month}}$); each arrival triggers a re-optimization
 that preserves existing allocations and assigns only the incremental policy to an eligible
-agency (e.g., respecting ZIP admissibility). In this table, the new policy is a high-value
-(Gold) policy and its ZIP is admissible for A1, so the increment goes to A1. If the ZIP were
-inadmissible for A1, the policy would be routed to the best admissible agency instead. This
-process repeats until the monthly total is filled. The inventory size is $U_{\text{tot}}=10$ in batch, 11 after the first arrival
-($X^{(1)}$), and 12 after the second arrival ($X^{(2)}$).
+agency (e.g., respecting ZIP admissibility). In this table, the first new policy is a
+high-value (Gold) policy and its ZIP is admissible for A1, so the increment goes to A1.
+For the second arrival, A1 is ZIP-inadmissible and, with ZIP cell-lock active, A1/A3/A4
+stay fixed by bucket so the extra Gold unit goes to A2. Subsequent arrivals keep
+all online constraints active (floors, ZIP locks, and bucket bounds). The inventory size is
+$U_{\text{tot}}=10$ in batch, 11 at $X^{(1)}$, and 12 at $X^{(2)}$.
+The incoming bucket sequence is
+$(\text{Gold},\text{Gold})$.
 
 \begin{table}[h!]
 \centering
@@ -57,69 +60,30 @@ Bucket total & 6 & 3 & 2 & 11 \\
 \hline
 Online $X^{(2)}$ & Gold & Silver & Bronze & Row total \\
 \hline
-A1 & 6 & 0 & 0 & 6 \\
-A2 & 0 & 2 & 1 & 3 \\
+A1 & 5 & 0 & 0 & 5 \\
+A2 & 1 & 2 & 1 & 4 \\
 A3 & 0 & 0 & 1 & 1 \\
 A4 & 1 & 1 & 0 & 2 \\
 \hline
 Bucket total & 7 & 3 & 2 & 12 \\
 \hline
 \end{tabular}
-\hspace{1cm}
-\begin{tabular}{l|rrr|r}
-\hline
-Online $X^{(3)}$ & Gold & Silver & Bronze & Row total \\
-\hline
-A1 & 7 & 0 & 0 & 7 \\
-A2 & 0 & 2 & 1 & 3 \\
-A3 & 0 & 0 & 1 & 1 \\
-A4 & 0 & 2 & 0 & 2 \\
-\hline
-Bucket total & 7 & 4 & 2 & 13 \\
-\hline
-\end{tabular}
-\hspace{1cm}
-\begin{tabular}{l|rrr|r}
-\hline
-Online $X^{(4)}$ & Gold & Silver & Bronze & Row total \\
-\hline
-A1 & 7 & 1 & 0 & 8 \\
-A2 & 0 & 2 & 1 & 3 \\
-A3 & 0 & 0 & 1 & 1 \\
-A4 & 0 & 2 & 0 & 2 \\
-\hline
-Bucket total & 7 & 5 & 2 & 14 \\
-\hline
-\end{tabular}
-\hspace{1cm}
-\begin{tabular}{l|rrr|r}
-\hline
-Online $X^{(5)}$ & Gold & Silver & Bronze & Row total \\
-\hline
-A1 & 7 & 2 & 0 & 9 \\
-A2 & 0 & 2 & 1 & 3 \\
-A3 & 0 & 0 & 1 & 1 \\
-A4 & 0 & 2 & 0 & 2 \\
-\hline
-Bucket total & 7 & 6 & 2 & 15 \\
-\hline
-\end{tabular}
-\caption{Baseline assignment (batch) and online assignments after each arrival.}
+\caption{Baseline assignment (batch) and online assignments for the first two arrivals.}
 \end{table}
 
 \section*{Delta (Online $-$ Batch)}
 
 \noindent
 From batch to $X^{(1)}$, A1 receives one additional Gold policy.
-Row-total delta: $\Delta = [1, 0, 0, 0]^\top$.
-As arrivals continue, each step adds one policy overall while row totals never
-decrease; the bucket mix can adjust to stay within bounds.
+From $X^{(1)}$ to $X^{(2)}$, A2 receives one additional Gold policy.
+Row-total deltas are $\Delta^{(1)} = [1, 0, 0, 0]^\top$ and
+$\Delta^{(2)} = [0, 1, 0, 0]^\top$.
 
 \section*{What's Not in the Batch (and why)}
 
 \noindent
 Batch mode optimizes a fixed monthly inventory $U_{\text{tot}}$. Online mode then simulates
-arrivals one at a time until that monthly total is reached; each arrival triggers a
+arrivals one at a time for the configured horizon; each arrival triggers a
 re-optimization that preserves existing allocations. The following rules only matter
 when adding a single new policy:
 
@@ -127,20 +91,49 @@ when adding a single new policy:
 \item \textbf{Per-agency floors:} protect existing allocations; no agency can drop below
 its previous total.
 \item \textbf{ZIP lock (for the incoming policy):} if the new policy's ZIP is inadmissible
-for agency $a$, that agency's total is frozen at its current count.
+for agency $a$, you can lock either (i) its row total (weaker) or (ii) each row cell
+(stronger). In this example we use \textbf{cell lock}: all $X_{a,c}$ are frozen at previous values.
+\item \textbf{Online bucket-total conservation (new):} at each online step, bucket totals are
+fixed to previous totals plus exactly one unit in the incoming bucket.
 \item \textbf{Headroom (per-agency buffer):} allows extra slots when adding one policy at a
 time to keep feasibility.
 \item \textbf{Bucket bounds still apply online:} each new policy must keep Gold/Silver/Bronze
 totals within their min/max limits.
 \end{itemize}
 
+\section*{Online Bucket-Fixed Constraint}
+
+\noindent
+Let $b^{(t)}_c=\sum_a X^{(t)}_{a,c}$ be the total in bucket $c$ at online step $t$ and let
+$\kappa_t$ be the incoming bucket at step $t$. The code enforces:
+\[
+\sum_a X^{(t)}_{a,c}
+\;=\;
+\sum_a X^{(t-1)}_{a,c}
+\;+\;
+\mathbf{1}\{c=\kappa_t\},
+\qquad \forall c\in\{\text{Gold, Silver, Bronze}\}.
+\]
+Therefore, non-incoming buckets are fixed from $t-1$ to $t$, and only the incoming bucket
+increases by one.
+
+\noindent
+For ZIP-inadmissible agencies in online mode, the example also enforces cell lock:
+\[
+X^{(t)}_{a,c}=X^{(t-1)}_{a,c},
+\qquad \forall c,\ \forall a\ \text{inadmissible at step }t.
+\]
+This prevents intra-row rebalancing for locked agencies.
+
 \section*{Constraint Audit (Summary)}
 
 \begin{itemize}
-\item Capacity: all agencies are at capacity in batch; in online, A1 binds, others have slack.
-\item Global conservation: totals are 10 (batch) and 11 (online).
-\item Bucket bounds: Silver and Bronze meet their minimums; all buckets stay within bounds.
-\item ZIP admissibility (online): A3 and A4 are locked at their floors.
+\item Capacity: all agencies are at capacity in batch; online headroom allows incremental arrivals.
+\item Global conservation: totals are 10 (batch), then 11 and 12 online.
+\item Bucket-fixed trajectory: column totals follow exactly
+$[5,3,2]\to[6,3,2]\to[7,3,2]$.
+\item Bucket bounds: all bucket totals remain within configured min/max bounds.
+\item ZIP admissibility (online): A3 and A4 are ZIP-locked at $X^{(1)}$; at $X^{(2)}$, A1 is also ZIP-locked.
 \end{itemize}
 
 \end{document}

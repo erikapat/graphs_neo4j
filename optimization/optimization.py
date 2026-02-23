@@ -45,18 +45,38 @@ Utot = sum(U.values())
 L_seed = {"A1": 3, "A2": 2, "A3": 1, "A4": 1}
 
 # Number of online arrivals to simulate after the batch plan
-U_MONTH = 5
+U_MONTH = 2
 
 # Per-agency headroom to allow U_MONTH arrivals to remain feasible in the toy example
 ONLINE_HEADROOM = U_MONTH
 
-# ZIP admissibility for the incoming policy
-res_zip = "28001"
-ziplist_batch = {"A1": None, "A2": None, "A3": None, "A4": None}
-ziplist_online = {"A1": {"28001", "28002"}, "A2": None, "A3": {"28003"}, "A4": {"28004"}}
+# If True, online re-optimization cannot reshuffle bucket totals:
+# each step keeps previous column totals and only increments the incoming bucket by +1.
+FIX_BUCKET_TOTALS_ONLINE = True
+# If True, ZIP-inadmissible agencies are frozen by cell (not only by row total) in online mode.
+STRICT_ZIP_CELL_LOCK_ONLINE = True
+# Incoming policy bucket by online step (length should be >= U_MONTH).
+ONLINE_BUCKET_SEQUENCE = ["Gold", "Gold"]
 
-def zip_admissible(a: str, online: bool) -> bool:
-    z = ziplist_online[a] if online else ziplist_batch[a]
+# ZIP admissibility for incoming policies
+ziplist_batch = {"A1": None, "A2": None, "A3": None, "A4": None}
+ziplist_online_by_step = {
+    1: {"A1": {"28001", "28002"}, "A2": None, "A3": {"28003"}, "A4": {"28004"}},
+    # Step 2 uses a ZIP inadmissible for A1 to match the toy figure:
+    # the incremental Gold policy is routed to A2.
+    2: {"A1": {"28002"}, "A2": None, "A3": {"28003"}, "A4": {"28004"}},
+}
+res_zip_by_step = {1: "28001", 2: "28001"}
+
+def zip_admissible(a: str, online: bool, online_step: int | None = None) -> bool:
+    if not online:
+        z = ziplist_batch[a]
+        return True if z in (None, set()) else (res_zip_by_step[1] in z)
+
+    step = 1 if online_step is None else online_step
+    z_map = ziplist_online_by_step.get(step, ziplist_online_by_step[1])
+    res_zip = res_zip_by_step.get(step, res_zip_by_step[1])
+    z = z_map[a]
     return True if z in (None, set()) else (res_zip in z)
 
 # Bucket-specific weights W_{a,c} to create variety (used by <W,X> objective)
@@ -100,7 +120,8 @@ def ones_row():
 
 # ---------- Build constraint matrices ----------
 
-def build_constraint_matrices(total_inventory: int, online: bool, L_use: dict, use_bucket_bounds: bool = True):
+def build_constraint_matrices(total_inventory: int, online: bool, L_use: dict,
+                              use_bucket_bounds: bool = True, online_step: int | None = None):
     """
     Returns (A_ineq, b_vec, Aeq_mat, beq_vec)
     total_inventory: total policies to assign in this run
@@ -137,7 +158,7 @@ def build_constraint_matrices(total_inventory: int, online: bool, L_use: dict, u
             A_rows.append(row_for_agency(a, -1))
             b_vals.append(-L_use[a])
     for a in AGENCIES:
-        if not zip_admissible(a, online):
+        if not zip_admissible(a, online, online_step):
             Aeq_rows.append(row_for_agency(a, +1))
             beq_vals.append(L_use[a] if online else 0)
 
@@ -150,7 +171,11 @@ def build_constraint_matrices(total_inventory: int, online: bool, L_use: dict, u
 # ---------- Solve with PuLP ----------
 
 def solve(total_inventory: int, online: bool, L_override: dict | None = None,
-          use_W: bool = True, use_bucket_bounds: bool = True):
+          use_W: bool = True, use_bucket_bounds: bool = True,
+          online_step: int | None = None,
+          prev_bucket_totals: dict[str, int] | None = None,
+          incoming_bucket: str | None = None,
+          prev_X: pd.DataFrame | None = None):
     """
     total_inventory: total policies to assign in this run
     online: True for live mode (incremental policy), False for batch
@@ -183,12 +208,32 @@ def solve(total_inventory: int, online: bool, L_override: dict | None = None,
             prob += pl.lpSum(x[(a, c)] for a in AGENCIES) >= L_bucket[c], f"BucketMin_{c}"
             prob += pl.lpSum(x[(a, c)] for a in AGENCIES) <= U_bucket[c], f"BucketMax_{c}"
 
+    # Optional strict online bucket conservation:
+    # keep previous bucket totals fixed except +1 in the incoming bucket.
+    if online and FIX_BUCKET_TOTALS_ONLINE:
+        if prev_bucket_totals is None or incoming_bucket is None:
+            raise ValueError("prev_bucket_totals and incoming_bucket are required in online mode "
+                             "when FIX_BUCKET_TOTALS_ONLINE=True")
+        for c in BUCKETS:
+            target_c = int(prev_bucket_totals[c]) + (1 if c == incoming_bucket else 0)
+            prob += pl.lpSum(x[(a, c)] for a in AGENCIES) == target_c, f"BucketFixed_{c}"
+
+    # Optional strict ZIP lock by cell:
+    # if incoming ZIP is inadmissible for agency a, freeze all its cells at previous values.
+    if online and STRICT_ZIP_CELL_LOCK_ONLINE:
+        if prev_X is None:
+            raise ValueError("prev_X is required in online mode when STRICT_ZIP_CELL_LOCK_ONLINE=True")
+        for a in AGENCIES:
+            if not zip_admissible(a, online, online_step):
+                for c in BUCKETS:
+                    prob += x[(a, c)] == int(prev_X.loc[a, c]), f"ZIP_{a}_{c}_cell"
+
     # Floors and ZIP lock
     if online:
         for a in AGENCIES:
             prob += pl.lpSum(x[(a, c)] for c in BUCKETS) >= L_use[a], f"Floor_{a}"
     for a in AGENCIES:
-        if not zip_admissible(a, online):
+        if not zip_admissible(a, online, online_step):
             lock_value = L_use[a] if online else 0
             prob += pl.lpSum(x[(a, c)] for c in BUCKETS) == lock_value, f"ZIP_{a}_eq"
 
@@ -210,7 +255,8 @@ def solve(total_inventory: int, online: bool, L_override: dict | None = None,
 # ---------- Explainability ----------
 
 def explain_solution(label: str, online: bool, total_inventory: int, X: pd.DataFrame,
-                     totals: pd.Series, L_use: dict, use_bucket_bounds: bool = True):
+                     totals: pd.Series, L_use: dict, use_bucket_bounds: bool = True,
+                     online_step: int | None = None):
     print(f"\n--- Explainability: {label} ---")
 
     # Objective contributions
@@ -266,7 +312,7 @@ def explain_solution(label: str, online: bool, total_inventory: int, X: pd.DataF
             slack = used - floor
             tag = "binding" if slack == 0 else "slack"
             print(f"  Floor {a}: used {used} >= {floor} -> {tag} (slack={slack})")
-        locked = [a for a in AGENCIES if not zip_admissible(a, online)]
+        locked = [a for a in AGENCIES if not zip_admissible(a, online, online_step)]
         if locked:
             print(f"  ZIP locks active: {', '.join(locked)}")
         else:
@@ -326,7 +372,9 @@ def main():
     heatmap_W(W_mat, "Productivity matrix W (bucket-adjusted)", "W_matrix_heatmap.png")
 
     # ----- BASELINE (BATCH) -----
-    st0, X0, tot0, obj0_q, obj0_W = solve(Utot, online=False, use_W=True, use_bucket_bounds=True)
+    st0, X0, tot0, obj0_q, obj0_W = solve(
+        Utot, online=False, use_W=True, use_bucket_bounds=True
+    )
     print("\n=== BASELINE (batch) ===")
     print("Status:", st0)
     print("Assignment X0:\n", X0)
@@ -338,15 +386,23 @@ def main():
                      X=X0, totals=tot0, L_use=L_seed, use_bucket_bounds=True)
 
     online_arrivals = U_MONTH
+    if FIX_BUCKET_TOTALS_ONLINE and len(ONLINE_BUCKET_SEQUENCE) < online_arrivals:
+        raise ValueError("ONLINE_BUCKET_SEQUENCE must have at least U_MONTH elements")
 
     # ----- ONLINE ARRIVALS -----
     X_prev, tot_prev, obj_prev_q, obj_prev_W = X0, tot0, obj0_q, obj0_W
     for step in range(1, online_arrivals + 1):
         total_inventory = Utot + step
         L_from_prev = {a: int(tot_prev[a]) for a in AGENCIES}
+        prev_bucket_totals = {c: int(X_prev[c].sum()) for c in BUCKETS}
+        incoming_bucket = ONLINE_BUCKET_SEQUENCE[step - 1]
         st1, X1, tot1, obj1_q, obj1_W = solve(total_inventory, online=True,
                                               L_override=L_from_prev,
-                                              use_W=True, use_bucket_bounds=True)
+                                              use_W=True, use_bucket_bounds=True,
+                                              online_step=step,
+                                              prev_bucket_totals=prev_bucket_totals,
+                                              incoming_bucket=incoming_bucket,
+                                              prev_X=X_prev)
         print(f"\n=== ONLINE (+{step}) ===")
         print("Status:", st1)
         print("Assignment X:\n", X1)
@@ -364,7 +420,8 @@ def main():
         stacked_by_bucket(X1, f"Online: per-agency bucket mix (+{step})",
                           f"live_bucket_mix_{step}.png")
         explain_solution(f"Online (+{step})", online=True, total_inventory=total_inventory,
-                         X=X1, totals=tot1, L_use=L_from_prev, use_bucket_bounds=True)
+                         X=X1, totals=tot1, L_use=L_from_prev, use_bucket_bounds=True,
+                         online_step=step)
 
         X_prev, tot_prev, obj_prev_q, obj_prev_W = X1, tot1, obj1_q, obj1_W
 

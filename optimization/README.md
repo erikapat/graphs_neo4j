@@ -8,6 +8,8 @@ dependencies isolated.
 ```sh
 uv venv --python 3.13
 source .venv/bin/activate
+which python
+python --version
 ```
 
 ## 2) Install dependencies
@@ -20,18 +22,16 @@ uv pip install -r requirements.txt
 
 ### ILP with explainability (PuLP)
 ```sh
-python optimization.py
+python optimization_v2.py
 ```
 
 ### Maximum entropy (continuous, CVXPY)
 ```sh
-uv pip install -r requirements-cvxpy.txt
 python optimization_maxent.py
 ```
 
 ### Hybrid objective (productivity + entropy, continuous, CVXPY)
 ```sh
-uv pip install -r requirements-cvxpy.txt
 python optimization_hybrid_entropy.py
 ```
 
@@ -44,11 +44,6 @@ optimization/figs/<script_name>/<timestamp>/
 ```
 
 Examples:
-- `optimization/figs/optimization/20260118_170103/`
+- `optimization/figs/optimization_v2/20260118_170103/`
 - `optimization/figs/optimization_maxent/20260118_170103/`
 - `optimization/figs/optimization_hybrid_entropy/20260118_170103/`
-
-## Notes
-
-- `requirements.txt` is the ILP-only stack that installs cleanly on Python 3.13.
-- `requirements-cvxpy.txt` adds CVXPY, which may require Python 3.11 or conda if wheels are unavailable for your platform.
